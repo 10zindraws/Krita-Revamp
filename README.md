@@ -3,9 +3,7 @@
 <img width="1920" height="1051" alt="image" src="https://github.com/user-attachments/assets/4e97e1d7-4abe-410c-953e-d7711edb7842" />
 Krita is a free and open source digital painting application. It is for artists who want to create professional work from start to end. Krita is used by comic book artists, illustrators, concept artists, matte and texture painters and in the digital VFX industry. <br>
 
-However, Krita 5.2.14 doesn't have some important features for a smooth workflow for illustrators and while Krita 5.3 prealpha does have some useful features the version as a whole is slower and less reliable. <br>
-
-I've decided to modify Krita 5.2.14's source code because some features can't simply be added via plugins.
+I made Krita Revamp because Krita lacks important features for those coming from Photoshop/Clip Studio paint and not all of them can be added via plugins. I chose to modify Krita 5.2.14 because it is stable and fast and 5.3 prealpha unstable and slower.
 
 ### Features/Changes
 
