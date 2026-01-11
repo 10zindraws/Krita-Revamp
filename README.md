@@ -37,13 +37,12 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 - krita-redesign (modified PS version)
 - label-box
 
----
 
-## Development Notes
+## Installation
 
-**Krita Revamp vs Krita 5.2.14 diffs:** <br>
-https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
-<br>
+If you're on Windows, download the latest release and install <br>
+
+If you prefer to build from source, download the git repository or "Download Zip" and proceed with Krita's instructions
 
 **Refer to Krita's docs for building from source:**
 
@@ -52,6 +51,14 @@ https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-w
 
 - **Linux:** <br>
 https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-linux
+<br>
+
+
+---
+## Development Notes
+
+**Krita Revamp vs Krita 5.2.14 diffs:** <br>
+https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
 <br>
 
 ### License
