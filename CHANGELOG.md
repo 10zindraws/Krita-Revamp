@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Groups are shorter and use a folder icon instead of live thumbnail. Folder icon changes depending on collapsed vs uncollapsed.
 - Vertical toolbar icons can be resized in Settings > Window
 - Overview updates instantly - no more 1 second latency for updates to appear
+- Krita revamp persistently remembers what settings you've changed on your brush preset unless you explicity reload to defaults
 
 ### Added
 - Added smoothing slider - optional toolbar slider
