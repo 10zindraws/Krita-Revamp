@@ -81,6 +81,7 @@
 #include "kis_acyclic_signal_connector.h"
 #include "KisMainWindow.h"
 #include "tool/kis_smoothing_options.h"
+#include "KisPaintOpPresetSessionStorage.h"
 
 
 KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const char *name)
@@ -93,7 +94,6 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
 
     setObjectName(name);
     KisConfig cfg(true);
-    m_dirtyPresetsEnabled = cfg.useDirtyPresets();
     m_eraserBrushSizeEnabled = cfg.useEraserBrushSize();
     m_eraserBrushOpacityEnabled = cfg.useEraserBrushOpacity();
 
@@ -502,7 +502,6 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
     connect(m_presetsEditor       , SIGNAL(defaultPresetClicked())             , SLOT(slotSetupDefaultPreset()));
     connect(m_presetsEditor       , SIGNAL(signalResourceSelected(KoResourceSP )), SLOT(resourceSelected(KoResourceSP )));
     connect(m_presetsEditor       , SIGNAL(reloadPresetClicked())              , SLOT(slotReloadPreset()));
-    connect(m_presetsEditor       , SIGNAL(dirtyPresetToggled(bool))           , SLOT(slotDirtyPresetToggled(bool)));
     connect(m_presetsEditor       , SIGNAL(eraserBrushSizeToggled(bool))       , SLOT(slotEraserBrushSizeToggled(bool)));
     connect(m_presetsEditor       , SIGNAL(eraserBrushOpacityToggled(bool))       , SLOT(slotEraserBrushOpacityToggled(bool)));
 
@@ -635,16 +634,8 @@ void KisPaintopBox::resourceSelected(KoResourceSP resource)
     KisPaintOpPresetSP preset = resource.dynamicCast<KisPaintOpPreset>();
 
     if (preset && preset->valid() && preset != m_resourceProvider->currentPreset()) {
-        if (!m_dirtyPresetsEnabled) {
-            KisSignalsBlocker blocker(m_optionWidget);
-            Q_UNUSED(blocker);
-
-            KisPaintOpPresetResourceServer *rserver = KisResourceServerProvider::instance()->paintOpPresetServer();
-
-            if (!rserver->reloadResource(preset)) {
-                qWarning() << "failed to reload the preset.";
-            }
-        }
+        // Load any saved session tweaks for this preset
+        KisPaintOpPresetSessionStorage::instance()->loadTweaks(preset);
 
         dbgResources << "resourceSelected: preset" << preset << (preset ? QString("%1").arg(preset->valid()) : "");
         setCurrentPaintop(preset);
@@ -1453,6 +1444,9 @@ void KisPaintopBox::slotReloadPreset()
 
     // Presets that just have been created cannot be reloaded.
     if (preset && preset->resourceId() > -1) {
+        // Clear any saved session tweaks for this preset
+        KisPaintOpPresetSessionStorage::instance()->clearTweaks(preset);
+
         const bool result = rserver->reloadResource(preset);
         KIS_SAFE_ASSERT_RECOVER_NOOP(result && "couldn't reload preset");
     }
@@ -1478,6 +1472,9 @@ void KisPaintopBox::slotGuiChangedCurrentPreset() // Called only when UI is chan
 
         m_presetsEditor->writeOptionSetting(const_cast<KisPaintOpSettings*>(preset->settings().data()));
     }
+
+    // Save the tweaks to session storage so they persist across restarts
+    KisPaintOpPresetSessionStorage::instance()->saveTweaks(preset);
 
     // we should also update the preset strip to update the status of the "dirty" mark
     m_presetsEditor->resourceSelected(m_resourceProvider->currentPreset());
@@ -1526,17 +1523,6 @@ void KisPaintopBox::slotDropLockedOption(KisPropertiesConfigurationSP p)
 
         }
     }
-}
-void KisPaintopBox::slotDirtyPresetToggled(bool value)
-{
-    if (!value) {
-        slotReloadPreset();
-        m_presetsEditor->resourceSelected(m_resourceProvider->currentPreset());
-        m_presetsEditor->updateViewSettings();
-    }
-    m_dirtyPresetsEnabled = value;
-    KisConfig cfg(false);
-    cfg.setUseDirtyPresets(m_dirtyPresetsEnabled);
 }
 
 void KisPaintopBox::slotEraserBrushSizeToggled(bool value)

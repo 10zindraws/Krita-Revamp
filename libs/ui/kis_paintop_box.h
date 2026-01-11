@@ -159,7 +159,6 @@ private Q_SLOTS:
     void slotGuiChangedCurrentPreset();
     void slotSaveLockedOptionToPreset(KisPropertiesConfigurationSP p);
     void slotDropLockedOption(KisPropertiesConfigurationSP p);
-    void slotDirtyPresetToggled(bool);
     void slotEraserBrushSizeToggled(bool);
     void slotEraserBrushOpacityToggled(bool);
     void slotUpdateSelectionIcon();
@@ -257,7 +256,6 @@ private:
     TabletToolID     m_currTabletToolID {KoInputDevice::invalid()};
     bool             m_presetsEnabled {true};
     bool             m_blockUpdate {false};
-    bool             m_dirtyPresetsEnabled {false};
     bool             m_eraserBrushSizeEnabled {false};
     bool             m_eraserBrushOpacityEnabled {false};
 

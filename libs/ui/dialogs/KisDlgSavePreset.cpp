@@ -19,6 +19,7 @@
 #include "KisResourceServerProvider.h"
 #include <kis_paintop_preset_icon_library.h>
 #include <KisResourceUserOperations.h>
+#include "KisPaintOpPresetSessionStorage.h"
 
 #include <kstandardguiitem.h>
 
@@ -210,6 +211,9 @@ void KisPresetSaveWidget::savePreset()
     //    // automatically, so we need to call the update manually!
     //    rServer->tagCategoryMembersChanged();
     if (success) {
+        // Clear session tweaks since the saved version is now the baseline
+        KisPaintOpPresetSessionStorage::instance()->clearTweaks(curPreset);
+
         m_favoriteResourceManager->updateFavoritePresets();
         close(); // we are done... so close the save brush dialog
     }

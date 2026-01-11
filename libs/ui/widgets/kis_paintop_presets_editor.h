@@ -91,7 +91,6 @@ Q_SIGNALS:
     void paintopActivated(const QString& presetName);
     void signalResourceSelected(KoResourceSP resource);
     void reloadPresetClicked();
-    void dirtyPresetToggled(bool value);
     void eraserBrushSizeToggled(bool value);
     void eraserBrushOpacityToggled(bool value);
     void brushEditorShown();

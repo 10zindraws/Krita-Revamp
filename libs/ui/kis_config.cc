@@ -571,12 +571,15 @@ void KisConfig::setColorSamplerPreviewCircleExtraCirclesEnabled(bool enabled)
 
 bool KisConfig::useDirtyPresets(bool defaultValue) const
 {
-   return (defaultValue ? false : m_cfg.readEntry("useDirtyPresets", true));
+    Q_UNUSED(defaultValue);
+    // Preset tweaks are now always saved persistently, so this always returns true
+    return true;
 }
 void KisConfig::setUseDirtyPresets(bool value)
 {
-    m_cfg.writeEntry("useDirtyPresets",value);
-    KisConfigNotifier::instance()->notifyConfigChanged();
+    Q_UNUSED(value);
+    // This function is kept for backward compatibility but is now a no-op
+    // Preset tweaks are always saved persistently
 }
 
 bool KisConfig::useEraserBrushSize(bool defaultValue) const

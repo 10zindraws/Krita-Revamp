@@ -171,7 +171,7 @@ class LabelBox(Extension):
         btn = QPushButton()
         btn.setAccessibleName('colorLabelButton')
         btn.setObjectName('colorLabelButton')
-        btn.setFixedSize(43, 32)
+        btn.setFixedSize(32, 32)
         btn.setFlat(True)
 
         btn.setIconSize(QSize(20, 20))
@@ -184,7 +184,7 @@ class LabelBox(Extension):
         comboBox = QComboBox()
         comboBox.setAccessibleName('colorLabelBox')
         comboBox.setObjectName('colorLabelBox')
-        comboBox.setFixedSize(43, 32)
+        comboBox.setFixedSize(32, 32)
 
         # generates an array to automatize the process of creating icons
         colors = [blueColor, greenColor, yellowColor, orangeColor, brownColor, redColor, purpleColor, greyColor]

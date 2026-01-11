@@ -44,8 +44,7 @@ class KisPresetDelegate : public QAbstractItemDelegate
 public:
     KisPresetDelegate(QObject * parent = 0)
         : QAbstractItemDelegate(parent)
-        , m_showText(false)
-        , m_useDirtyPresets(false) {}
+        , m_showText(false) {}
 
     ~KisPresetDelegate() override {}
 
@@ -61,13 +60,8 @@ public:
         m_showText = showText;
     }
 
-    void setUseDirtyPresets(bool value) {
-        m_useDirtyPresets = value;
-    }
-
 private:
     bool m_showText;
-    bool m_useDirtyPresets;
 };
 
 void KisPresetDelegate::paint(QPainter * painter, const QStyleOptionViewItem & option, const QModelIndex & index) const
@@ -116,7 +110,7 @@ void KisPresetDelegate::paint(QPainter * painter, const QStyleOptionViewItem & o
         // Put an asterisk after the preset if it is dirty. This will help in case the pixmap icon is too small
 
         QString dirtyPresetIndicator = QString("");
-        if (m_useDirtyPresets && dirty) {
+        if (dirty) {
             dirtyPresetIndicator = QString("*");
         }
 
@@ -138,7 +132,7 @@ void KisPresetDelegate::paint(QPainter * painter, const QStyleOptionViewItem & o
 
     }
 
-    if (m_useDirtyPresets && dirty) {
+    if (dirty) {
         const QIcon icon = KisIconUtils::loadIcon("dirty-preset");
         QPixmap pixmap = icon.pixmap(QSize(16,16));
         painter->drawPixmap(paintRect.x() + 3, paintRect.y() + 3, pixmap);
@@ -236,7 +230,6 @@ void KisPresetChooser::setViewModeToDetail()
 void KisPresetChooser::notifyConfigChanged()
 {
     KisConfig cfg(true);
-    m_delegate->setUseDirtyPresets(cfg.useDirtyPresets());
     setIconSize(cfg.presetIconSize());
 }
 
