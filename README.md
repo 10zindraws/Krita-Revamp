@@ -41,10 +41,11 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 
 ## Development Notes
 
-Krita Revamp vs Krita 5.2.14 diffs: <br>
+**Krita Revamp vs Krita 5.2.14 diffs:** <br>
 https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
 <br>
-Refer to Krita's docs for building from source:
+
+**Refer to Krita's docs for building from source:**
 
 - **Windows:** <br>
 https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-windows
@@ -52,6 +53,7 @@ https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-w
 - **Linux:** <br>
 https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-linux
 <br>
+
 ### License
 
 Krita as a whole is licensed under the GNU Public License, Version 3. Individual files may have a different, but compatible license.
