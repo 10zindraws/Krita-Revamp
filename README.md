@@ -1,10 +1,40 @@
-![Picture](https://krita.org/images/krita-logo-light.svg)
+# Krita Revamp
 
+<img width="1920" height="1051" alt="image" src="https://github.com/user-attachments/assets/4e97e1d7-4abe-410c-953e-d7711edb7842" />
 Krita is a free and open source digital painting application. It is for artists who want to create professional work from start to end. Krita is used by comic book artists, illustrators, concept artists, matte and texture painters and in the digital VFX industry. <br>
 
 However, Krita 5.2.14 doesn't have some important features for a smooth workflow for illustrators and while Krita 5.3 prealpha does have some useful features the version as a whole is slower and less reliable. <br>
 
 I've decided to modify Krita 5.2.14's source code because some features can't simply be added via plugins.
+
+### Features/Changes
+
+- Removed news section at welcome screen (unnecessary since revamp will stay on 5.2.14)
+- For Photoshop users: "Activate Line Tool" only activates when freehand brush tool is the current tool <br>
+Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-settings-photoshop-compatible-inconsistencies/32351/9?u=tenzindraws
+- Groups are shorter and use a folder icon for thumbnails like Photoshop folders
+<img width="259" height="354" alt="image" src="https://github.com/user-attachments/assets/6f4b769e-4570-4b58-b492-711033027401" />
+- Vertical toolbar icons can be resized in Settings > Window
+- Overview updates instantly - no more 1 second latency for brushstrokes to appear
+- Implemented the same togglable horizontal relative zoom option from 5.3 prealpha to this version of Krita
+- Added smoothing slider - optional toolbar slider
+- Added extra spacers toolbar actions
+
+#### Built-in plugins
+- dockerundercursor
+- krita_ui_tweaks (modified PS version)
+- quick_brush_size
+- separatebrusheraser
+- layer_kit
+- plugin quickexportdocker
+<img width="294" height="449" alt="image" src="https://github.com/user-attachments/assets/5dcb81bb-f9eb-4306-8d8e-ed35018993b5" />
+- plugin preset_groups
+- plugin super_docker-lock
+- plugin timer_watch
+- plugin krita_work_timer
+- plugin krita-redesign (modified PS version)
+- plugin label-box
+
 
 ### Development Notes
 
