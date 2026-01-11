@@ -40,7 +40,7 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 
 ### Development Notes
 
-Krita Revamp vs Krita 5.2.14 diffs: https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14![Picture](https://krita.org/images/hero-image-50.webp)
+Krita Revamp vs Krita 5.2.14 diffs: https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
 
 Refer to Krita's docs for building from source
 
