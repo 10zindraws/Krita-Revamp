@@ -25,7 +25,7 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 - separatebrusheraser
 - layer_kit
 - plugin quickexportdocker
-<img width="294" height="449" alt="image" src="https://github.com/user-attachments/assets/5dcb81bb-f9eb-4306-8d8e-ed35018993b5" />
+<img width="294" height="449" alt="image" src="https://github.com/user-attachments/assets/5dcb81bb-f9eb-4306-8d8e-ed35018993b5" /> <br>
 - plugin preset_groups
 - plugin super_docker-lock
 - plugin timer_watch
