@@ -14,7 +14,7 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 <img width="259" height="354" alt="image" src="https://github.com/user-attachments/assets/6f4b769e-4570-4b58-b492-711033027401" /> <br>
 - Vertical toolbar icons can be resized in Settings > Window
 - Added "extra space" spacers so you can customize your toolbars more since expanding spacers can only be used once <br>
-<img width="700" src="https://github.com/user-attachments/assets/e75fa0d9-e167-41cc-9278-41a22914d316" />
+<img width="500" src="https://github.com/user-attachments/assets/e75fa0d9-e167-41cc-9278-41a22914d316" />
 
 - Overview updates instantly - no more 1 second latency for brushstrokes to appear
 - Implemented the same togglable horizontal relative zoom option from 5.3 prealpha to this version of Krita
