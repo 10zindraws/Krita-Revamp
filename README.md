@@ -11,7 +11,7 @@ I made Krita Revamp because Krita lacks important features for those coming from
 - For Photoshop users: "Activate Line Tool" only activates when freehand brush tool is the current tool <br>
 Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-settings-photoshop-compatible-inconsistencies/32351/9?u=tenzindraws
 - Groups are shorter and use a folder icon for thumbnails like Photoshop folders
-<img width="259" height="354" alt="image" src="https://github.com/user-attachments/assets/6f4b769e-4570-4b58-b492-711033027401" />
+<img width="259" height="354" alt="image" src="https://github.com/user-attachments/assets/6f4b769e-4570-4b58-b492-711033027401" /> <br>
 - Vertical toolbar icons can be resized in Settings > Window
 - Overview updates instantly - no more 1 second latency for brushstrokes to appear
 - Implemented the same togglable horizontal relative zoom option from 5.3 prealpha to this version of Krita
