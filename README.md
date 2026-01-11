@@ -2,7 +2,7 @@
 
 Krita is a free and open source digital painting application. It is for artists who want to create professional work from start to end. Krita is used by comic book artists, illustrators, concept artists, matte and texture painters and in the digital VFX industry. <br>
 
-However, Krita 5.2.14 doesn't have some important features for a smooth workflow for illustrators and Krita 5.3 prealpha does have some useful features but it's slower and less reliable. <br>
+However, Krita 5.2.14 doesn't have some important features for a smooth workflow for illustrators and while Krita 5.3 prealpha does have some useful features the version as a whole is slower and less reliable. <br>
 
 I've decided to modify Krita 5.2.14's source code because some features can't simply be added via plugins.
 
