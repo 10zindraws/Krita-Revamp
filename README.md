@@ -7,7 +7,7 @@ I made Krita Revamp because Krita lacks important features for those coming from
 
 ### Features/Changes
 
-- Removed news section at welcome screen (unnecessary since revamp will stay on 5.2.14)
+- Removed news section at welcome screen so you can see more of your recent images
 - For Photoshop users: "Activate Line Tool" only activates when freehand brush tool is the current tool <br>
 Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-settings-photoshop-compatible-inconsistencies/32351/9?u=tenzindraws
 - Groups are shorter and use a folder icon for thumbnails like Photoshop folders
