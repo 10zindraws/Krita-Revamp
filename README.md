@@ -37,8 +37,9 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 - krita-redesign (modified PS version)
 - label-box
 
+---
 
-### Development Notes
+## Development Notes
 
 Krita Revamp vs Krita 5.2.14 diffs: https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
 
