@@ -17,6 +17,7 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 - Implemented the same togglable horizontal relative zoom option from 5.3 prealpha to this version of Krita
 - Added smoothing slider - optional toolbar slider
 - Added extra spacers toolbar actions
+- Removed "Temporarily Save Tweaks To Presets" because this is a useless feature. Krita revamp persistently remembers what settings you've changed on your brush preset and ONLY resets when you explicity click the "Reload the brush preset" button. The default version of Krita would reset your brush settings unless you clicked "Overwrite Brush Preset" every single time before closing Krita.
 
 #### Built-in plugins
 - dockerundercursor
