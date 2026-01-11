@@ -9,29 +9,15 @@
 
 #include "kritaui_export.h"
 #include "KisViewManager.h"
-#include <KisUpdaterBase.h>
 #include <KisKineticScroller.h>
 
-#include <QAction>
 #include <QWidget>
 #include "ui_KisWelcomePage.h"
-#include <QStandardItemModel>
 #include <QScopedPointer>
 #include <QFont>
 
-#include "config-updaters.h"
 class RecentItemDelegate;
 class KisMainWindow;
-
-// Custom QAction to bridge a QLabel::linkActivated signal to a QAction::setChecked signal
-class ShowNewsAction : public QAction
-{
-  Q_OBJECT
-public:
-    using QAction::QAction;
-private Q_SLOTS:
-    void enableFromLink(QString unused_url);
-};
 
 /// A widget for displaying if no documents are open. This will display in the MDI area
 class KRITAUI_EXPORT KisWelcomePageWidget : public QWidget, public Ui::KisWelcomePage
@@ -51,11 +37,6 @@ public Q_SLOTS:
 
     void slotUpdateThemeColors();
 
-#ifdef ENABLE_UPDATERS
-    void slotSetUpdateStatus(KisUpdaterStatus updateStatus);
-    void slotShowUpdaterErrorDetails();
-#endif
-
 private Q_SLOTS:
     void slotNewFileClicked();
     void slotOpenFileClicked();
@@ -69,15 +50,6 @@ private Q_SLOTS:
     void slotRecentFilesModelIsUpToDate();
 
     void slotScrollerStateChanged(QScroller::State state){ KisKineticScroller::updateCursor(this, state); }
-
-#ifdef ENABLE_UPDATERS
-    void slotRunVersionUpdate();
-    void slotToggleUpdateChecks(bool state);
-#endif
-
-#ifdef Q_OS_ANDROID
-    void slotUpdateDonationState();
-#endif
 
     bool isDevelopmentBuild();
 
@@ -96,16 +68,7 @@ protected:
 
 
 private:
-    void setupNewsLangSelection(QMenu *newsOptionMenu);
     void showDevVersionHighlight();
-
-#ifdef ENABLE_UPDATERS
-    void updateVersionUpdaterFrame();
-#endif
-
-#ifdef Q_OS_ANDROID
-    void initDonations();
-#endif
 
     KisMainWindow *m_mainWindow {nullptr};
 
@@ -121,12 +84,6 @@ private:
     QColor backgroundColor;
     QColor blendedColor;
     QString blendedStyle;
-
-#ifdef ENABLE_UPDATERS
-    QScopedPointer<KisUpdaterBase> m_versionUpdater;
-    KisUpdaterStatus m_updaterStatus;
-#endif
-    bool m_networkIsAllowed {false};
 
     QScopedPointer<RecentItemDelegate> recentItemDelegate;
 

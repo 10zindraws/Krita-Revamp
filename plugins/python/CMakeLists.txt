@@ -59,8 +59,8 @@ function(install_pykrita_plugin name)
 endfunction()
 
 install_pykrita_plugin(assignprofiledialog)
-install_pykrita_plugin(scripter)
-install_pykrita_plugin(colorspace)
+install_pykrita_plugin(scripter PATTERNS "*.svg" "*.qrc")
+install_pykrita_plugin(colorspace PATTERNS "*.svg" "*.qrc")
 install_pykrita_plugin(documenttools)
 install_pykrita_plugin(filtermanager)
 install_pykrita_plugin(exportlayers)
@@ -76,8 +76,23 @@ install_pykrita_plugin(comics_project_management_tools)
 install_pykrita_plugin(krita_script_starter)
 install_pykrita_plugin(plugin_importer)
 install_pykrita_plugin(mixer_slider_docker)
-install_pykrita_plugin(channels2layers)
+install_pykrita_plugin(channels2layers PATTERNS "*.jpg")
 install_pykrita_plugin(photobash_images)
+
+# Additional community plugins
+install_pykrita_plugin(dockerundercursor PATTERNS "*.action")
+install_pykrita_plugin(quick_brush_size)
+install_pykrita_plugin(separatebrusheraser)
+install_pykrita_plugin(layer_kit PATTERNS "*.png")
+install_pykrita_plugin(quickexportdocker)
+install_pykrita_plugin(preset_groups PATTERNS "*.json" "*.png")
+install_pykrita_plugin(super_docker_lock)
+install_pykrita_plugin(timer_watch PATTERNS "*.wav" "*.webm" "*.png")
+install_pykrita_plugin(krita_work_timer)
+install_pykrita_plugin(selectionsbagdocker)
+install_pykrita_plugin(krita_redesign PATTERNS "*.action")
+install_pykrita_plugin(label_box)
+install_pykrita_plugin(krita_ui_tweaks PATTERNS "*.html")
 
 # if(PYTHON_VERSION_MAJOR VERSION_EQUAL 3)
 #     install_pykrita_plugin(cmake_utils)
@@ -89,6 +104,14 @@ install( FILES
     tenbrushes/tenbrushes.action
     tenscripts/tenscripts.action
     plugin_importer/plugin_importer.action
+    dockerundercursor/dockerundercursor.action
+    dockerundercursor/ducshotcuts.action
+    quick_brush_size/quick_brush_size.action
+    separatebrusheraser/separatebrusheraser.action
+    layer_kit/layer_kit.action
+    super_docker_lock/super_docker_lock.action
+    krita_ui_tweaks/krita_ui_tweaks.action
+    krita_redesign/nuTools/nutools.action
 DESTINATION  ${DATA_INSTALL_DIR}/krita/actions)
 
 install(

@@ -49,8 +49,14 @@
 #include <KisKineticScroller.h>
 
 static const char separatorstring[] = I18N_NOOP("--- separator ---");
+static const char spacer5string[] = I18N_NOOP("--- extra space 1 (5px) ---");
+static const char spacer10string[] = I18N_NOOP("--- extra space 2 (10px) ---");
+static const char spacer30string[] = I18N_NOOP("--- extra space 3 (30px) ---");
 
 #define SEPARATORSTRING i18n(separatorstring)
+#define SPACER5STRING i18n(spacer5string)
+#define SPACER10STRING i18n(spacer10string)
+#define SPACER30STRING i18n(spacer30string)
 
 //static const char *const s_XmlTypeToString[] = { "Shell", "Part", "Local", "Merged" };
 
@@ -1175,6 +1181,9 @@ void KisKEditToolBarWidgetPrivate::loadToolBarCombo(const QString &defaultToolBa
 void KisKEditToolBarWidgetPrivate::loadActions(const QDomElement &elem)
 {
     const QLatin1String tagSeparator("Separator");
+    const QLatin1String tagSpacer5("Spacer5");
+    const QLatin1String tagSpacer10("Spacer10");
+    const QLatin1String tagSpacer30("Spacer30");
     const QLatin1String tagMerge("Merge");
     const QLatin1String tagActionList("ActionList");
     const QLatin1String tagAction("Action");
@@ -1182,6 +1191,12 @@ void KisKEditToolBarWidgetPrivate::loadActions(const QDomElement &elem)
 
     int     sep_num = 0;
     QString sep_name(QStringLiteral("separator_%1"));
+    int     spacer5_num = 0;
+    QString spacer5_name(QStringLiteral("spacer5_%1"));
+    int     spacer10_num = 0;
+    QString spacer10_name(QStringLiteral("spacer10_%1"));
+    int     spacer30_num = 0;
+    QString spacer30_name(QStringLiteral("spacer30_%1"));
 
     // clear our lists
     m_inactiveList->clear();
@@ -1211,6 +1226,30 @@ void KisKEditToolBarWidgetPrivate::loadActions(const QDomElement &elem)
             ToolBarItem *act = new ToolBarItem(m_activeList, tagSeparator, sep_name.arg(sep_num++), QString());
             act->setSeparator(true);
             act->setText(SEPARATORSTRING);
+            it.setAttribute(attrName, act->internalName());
+            continue;
+        }
+
+        if (it.tagName() == tagSpacer5) {
+            ToolBarItem *act = new ToolBarItem(m_activeList, tagSpacer5, spacer5_name.arg(spacer5_num++), i18n("Adds 5 pixels of extra space"));
+            act->setSeparator(true);
+            act->setText(SPACER5STRING);
+            it.setAttribute(attrName, act->internalName());
+            continue;
+        }
+
+        if (it.tagName() == tagSpacer10) {
+            ToolBarItem *act = new ToolBarItem(m_activeList, tagSpacer10, spacer10_name.arg(spacer10_num++), i18n("Adds 10 pixels of extra space"));
+            act->setSeparator(true);
+            act->setText(SPACER10STRING);
+            it.setAttribute(attrName, act->internalName());
+            continue;
+        }
+
+        if (it.tagName() == tagSpacer30) {
+            ToolBarItem *act = new ToolBarItem(m_activeList, tagSpacer30, spacer30_name.arg(spacer30_num++), i18n("Adds 30 pixels of extra space"));
+            act->setSeparator(true);
+            act->setText(SPACER30STRING);
             it.setAttribute(attrName, act->internalName());
             continue;
         }
@@ -1265,11 +1304,27 @@ void KisKEditToolBarWidgetPrivate::loadActions(const QDomElement &elem)
 
     m_inactiveList->sortItems(Qt::AscendingOrder);
 
-    // finally, add default separators to the inactive list
+    // finally, add default separators and spacers to the inactive list
     ToolBarItem *act = new ToolBarItem(0L, tagSeparator, sep_name.arg(sep_num++), QString());
     act->setSeparator(true);
     act->setText(SEPARATORSTRING);
     m_inactiveList->insertItem(0, act);
+
+    // Add spacer items to the inactive list
+    ToolBarItem *spacer5 = new ToolBarItem(0L, tagSpacer5, spacer5_name.arg(spacer5_num++), i18n("Adds 5 pixels of extra space"));
+    spacer5->setSeparator(true);
+    spacer5->setText(SPACER5STRING);
+    m_inactiveList->insertItem(1, spacer5);
+
+    ToolBarItem *spacer10 = new ToolBarItem(0L, tagSpacer10, spacer10_name.arg(spacer10_num++), i18n("Adds 10 pixels of extra space"));
+    spacer10->setSeparator(true);
+    spacer10->setText(SPACER10STRING);
+    m_inactiveList->insertItem(2, spacer10);
+
+    ToolBarItem *spacer30 = new ToolBarItem(0L, tagSpacer30, spacer30_name.arg(spacer30_num++), i18n("Adds 30 pixels of extra space"));
+    spacer30->setSeparator(true);
+    spacer30->setText(SPACER30STRING);
+    m_inactiveList->insertItem(3, spacer30);
 }
 
 KisKActionCollection *KisKEditToolBarWidget::actionCollection() const
@@ -1396,9 +1451,14 @@ void KisKEditToolBarWidgetPrivate::insertActive(ToolBarItem *item, ToolBarItem *
     }
 
     QDomElement new_item;
-    // let's handle the separator specially
+    // let's handle the separator and spacers specially
     if (item->isSeparator()) {
-        new_item = m_widget->domDocument().createElement(QStringLiteral("Separator"));
+        // Use the internalTag to determine the correct element type
+        QString tag = item->internalTag();
+        if (tag.isEmpty()) {
+            tag = QStringLiteral("Separator");
+        }
+        new_item = m_widget->domDocument().createElement(tag);
     } else {
         new_item = m_widget->domDocument().createElement(QStringLiteral("Action"));
     }

@@ -8,6 +8,7 @@
 #include "kis_config.h"
 #include "NodeDelegate.h"
 #include "kis_node_model.h"
+#include "kis_node_filter_proxy_model.h"
 #include "NodeToolTip.h"
 #include "NodeView.h"
 #include "KisPart.h"
@@ -33,10 +34,51 @@
 #include "krita_utils.h"
 #include "kis_config_notifier.h"
 #include <kis_painting_tweaks.h>
+#include <kis_node.h>
 
 typedef KisBaseNode::Property* OptionalProperty;
 
 #include <kis_base_node.h>
+
+namespace {
+constexpr int kGroupRowHeightNumerator = 7;
+constexpr int kGroupRowHeightDenominator = 10;
+
+KisNodeSP nodeForIndex(const QModelIndex &index)
+{
+    if (!index.isValid()) {
+        return KisNodeSP();
+    }
+
+    const QModelIndex columnIndex = index.sibling(index.row(), 0);
+
+    if (auto proxy = qobject_cast<const KisNodeFilterProxyModel *>(columnIndex.model())) {
+        return proxy->nodeFromIndex(columnIndex);
+    }
+    if (auto model = qobject_cast<const KisNodeModel *>(columnIndex.model())) {
+        return model->nodeFromIndex(columnIndex);
+    }
+
+    return KisNodeSP();
+}
+
+bool isGroupLayerIndex(const QModelIndex &index)
+{
+    KisNodeSP node = nodeForIndex(index);
+    return node && node->inherits("KisGroupLayer");
+}
+
+int rowHeightForIndex(const QModelIndex &index, int baseRowHeight)
+{
+    if (!isGroupLayerIndex(index)) {
+        return baseRowHeight;
+    }
+
+    const int scaled = (baseRowHeight * kGroupRowHeightNumerator + kGroupRowHeightDenominator / 2) /
+        kGroupRowHeightDenominator;
+    return qMax(1, scaled);
+}
+} // namespace
 
 class NodeDelegate::Private
 {
@@ -106,10 +148,11 @@ NodeDelegate::~NodeDelegate()
 QSize NodeDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     KisNodeViewColorScheme scm;
+    const int rowHeight = rowHeightForIndex(index, d->rowHeight);
     if (index.column() == NodeView::VISIBILITY_COL) {
-        return QSize(scm.visibilityColumnWidth(), d->rowHeight);
+        return QSize(scm.visibilityColumnWidth(), rowHeight);
     }
-    return QSize(option.rect.width(), d->rowHeight);
+    return QSize(option.rect.width(), rowHeight);
 }
 
 void NodeDelegate::paint(QPainter *p, const QStyleOptionViewItem &o, const QModelIndex &index) const
@@ -263,9 +306,8 @@ void NodeDelegate::drawFrame(QPainter *p, const QStyleOptionViewItem &option, co
 
 QRect NodeDelegate::thumbnailClickRect(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    Q_UNUSED(index);
-
     QRect rc = d->thumbnailGeometry;
+    rc.setHeight(rowHeightForIndex(index, d->rowHeight));
 
     // Move to current index
     rc.moveTop(option.rect.topLeft().y());
@@ -283,13 +325,8 @@ void NodeDelegate::drawThumbnail(QPainter *p, const QStyleOptionViewItem &option
 {
     KisNodeViewColorScheme scm;
 
-    const qreal devicePixelRatio = p->device()->devicePixelRatioF();
-    const int thumbSizeHighRes = d->thumbnailSize*devicePixelRatio;
-
     const qreal oldOpacity = p->opacity(); // remember previous opacity
 
-    QImage img = index.data(int(KisNodeModel::BeginThumbnailRole) + thumbSizeHighRes).value<QImage>();
-    img.setDevicePixelRatio(devicePixelRatio);
     if (!(option.state & QStyle::State_Enabled)) {
         p->setOpacity(0.35);
     }
@@ -297,6 +334,31 @@ void NodeDelegate::drawThumbnail(QPainter *p, const QStyleOptionViewItem &option
     QRect fitRect = thumbnailClickRect(option, index);
     // Shrink to icon rect
     fitRect = kisGrowRect(fitRect, -(scm.thumbnailMargin()+scm.border()));
+
+    if (isGroupLayerIndex(index)) {
+        const bool isExpanded = option.state & QStyle::State_Open;
+        const char *iconName = isExpanded ? "psopenfolder" : "psclosedfolder";
+        QIcon icon = KisIconUtils::loadIcon(QLatin1String(iconName));
+        if (!icon.isNull()) {
+            const int iconSide = qMin(fitRect.width(), fitRect.height());
+            if (iconSide > 0) {
+                QPixmap pixmap = icon.pixmap(iconSide,
+                                             (option.state & QStyle::State_Enabled) ?
+                                             QIcon::Normal : QIcon::Disabled);
+                const QPoint offset = fitRect.topLeft() +
+                    QPoint((fitRect.width() - iconSide) / 2, (fitRect.height() - iconSide) / 2);
+                p->drawPixmap(offset, pixmap);
+            }
+            p->setOpacity(oldOpacity); // restore old opacity
+            return;
+        }
+    }
+
+    const qreal devicePixelRatio = p->device()->devicePixelRatioF();
+    const int thumbSizeHighRes = d->thumbnailSize*devicePixelRatio;
+
+    QImage img = index.data(int(KisNodeModel::BeginThumbnailRole) + thumbSizeHighRes).value<QImage>();
+    img.setDevicePixelRatio(devicePixelRatio);
 
     QPoint offset;
     offset.setX((fitRect.width() - img.width()/devicePixelRatio) / 2);
@@ -320,12 +382,13 @@ QRect NodeDelegate::iconsRect(const QStyleOptionViewItem &option, const QModelIn
     KisNodeViewColorScheme scm;
 
     int propCount = d->numProperties(index);
+    const int rowHeight = rowHeightForIndex(index, d->rowHeight);
 
     const int iconsWidth =
         propCount * (scm.iconSize() + 2 * scm.iconMargin()) +
         (propCount + 1) * scm.border();
 
-    QRect fitRect = QRect(0, 0, iconsWidth, d->rowHeight - scm.border());
+    QRect fitRect = QRect(0, 0, iconsWidth, rowHeight - scm.border());
     // Move to current index
     fitRect.moveTop(option.rect.topLeft().y());
     // Move to correct location.
@@ -714,6 +777,7 @@ void NodeDelegate::drawIcons(QPainter *p, const QStyleOptionViewItem &option, co
 {
     KisNodeViewColorScheme scm;
     const QRect rc = iconsRect(option, index);
+    const int rowHeight = rowHeightForIndex(index, d->rowHeight);
 
     QTransform oldTransform = p->transform();
     QPen oldPen = p->pen();
@@ -721,7 +785,7 @@ void NodeDelegate::drawIcons(QPainter *p, const QStyleOptionViewItem &option, co
     p->setPen(scm.gridColor(option, d->view));
 
     int x = 0;
-    const int y = (d->rowHeight - scm.border() - scm.iconSize()) / 2;
+    const int y = (rowHeight - scm.border() - scm.iconSize()) / 2;
     KisBaseNode::PropertyList props = index.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
     QList<OptionalProperty> realProps = d->rightmostProperties(props);
 
@@ -757,11 +821,10 @@ void NodeDelegate::drawIcons(QPainter *p, const QStyleOptionViewItem &option, co
 
 QRect NodeDelegate::visibilityClickRect(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    Q_UNUSED(index);
     KisNodeViewColorScheme scm;
 
     QRect rc = scm.relVisibilityRect();
-    rc.setHeight(d->rowHeight);
+    rc.setHeight(rowHeightForIndex(index, d->rowHeight));
 
     // Move to current index
     rc.moveCenter(option.rect.center());
@@ -777,14 +840,13 @@ QRect NodeDelegate::visibilityClickRect(const QStyleOptionViewItem &option, cons
 
 QRect NodeDelegate::decorationClickRect(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    Q_UNUSED(index);
     KisNodeViewColorScheme scm;
 
     QRect rc = scm.relDecorationRect();
 
     // Move to current index
     rc.moveTop(option.rect.topLeft().y());
-    rc.setHeight(d->rowHeight);
+    rc.setHeight(rowHeightForIndex(index, d->rowHeight));
     // Move to correct location.
     if (option.direction == Qt::RightToLeft) {
         rc.moveRight(option.rect.right() - d->thumbnailGeometry.width());

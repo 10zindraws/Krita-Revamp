@@ -2196,6 +2196,17 @@ void KisConfig::setZoomMarginSize(int zoomMarginSize)
     m_cfg.writeEntry("zoomMarginSize", zoomMarginSize);
 }
 
+int KisConfig::verticalToolbarIconSize(bool defaultValue) const
+{
+    return (defaultValue ? 22 : m_cfg.readEntry("verticalToolbarIconSize", 22));
+}
+
+void KisConfig::setVerticalToolbarIconSize(int iconSize)
+{
+    m_cfg.writeEntry("verticalToolbarIconSize", iconSize);
+    KisConfigNotifier::instance()->notifyToolBoxIconSizeChanged(iconSize);
+}
+
 const KoColorSpace* KisConfig::customColorSelectorColorSpace(bool defaultValue) const
 {
     const KoColorSpace *cs = 0;
@@ -2482,6 +2493,16 @@ bool KisConfig::activateTransformToolAfterPaste(bool defaultValue) const
 void KisConfig::setActivateTransformToolAfterPaste(bool value)
 {
     m_cfg.writeEntry("activateTransformToolAfterPaste", value);
+}
+
+bool KisConfig::zoomHorizontal(bool defaultValue) const
+{
+    return defaultValue ? false : m_cfg.readEntry("zoomHorizontal", false);
+}
+
+void KisConfig::setZoomHorizontal(bool value)
+{
+    m_cfg.writeEntry("zoomHorizontal", value);
 }
 
 KisConfig::RootSurfaceFormat KisConfig::rootSurfaceFormat(bool defaultValue) const

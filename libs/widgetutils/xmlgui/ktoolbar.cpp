@@ -48,6 +48,7 @@
 #include "kxmlguiwindow.h"
 
 #include <kis_icon_utils.h>
+#include <kis_config_notifier.h>
 
 /*
  Toolbar settings (e.g. icon size or toolButtonStyle)
@@ -222,10 +223,14 @@ public:
     QMenu *context;
     QAction *dragAction;
     QPoint dragStartPosition;
+
+    // Vertical toolbar icon size from settings
+    static int s_verticalIconSize;
 };
 
 bool KisToolBar::Private::s_editable = false;
 bool KisToolBar::Private::s_locked = true;
+int KisToolBar::Private::s_verticalIconSize = 22;
 
 void KisToolBar::Private::init(bool readConfig, bool _isMainToolBar)
 {
@@ -251,6 +256,23 @@ void KisToolBar::Private::init(bool readConfig, bool _isMainToolBar)
         connect(q, SIGNAL(orientationChanged(Qt::Orientation)),
                 q->mainWindow(), SLOT(setSettingsDirty()));
     }
+
+    // Update styling when orientation changes (vertical toolbars have smaller icons and padding)
+    KisToolBar *toolbar = q;
+    connect(toolbar, &QToolBar::orientationChanged, toolbar, [toolbar](Qt::Orientation) {
+        toolbar->updateOrientationStyling();
+    });
+
+    // Read initial vertical toolbar icon size from config (same location as KisConfig uses)
+    KConfigGroup kritaCfg(KSharedConfig::openConfig(), QString());
+    s_verticalIconSize = kritaCfg.readEntry("verticalToolbarIconSize", 22);
+
+    // Connect to config notifier for live updates to vertical toolbar icon size
+    connect(KisConfigNotifier::instance(), &KisConfigNotifier::sigToolBoxIconSizeChanged,
+            toolbar, [toolbar](int iconSize) {
+        KisToolBar::Private::s_verticalIconSize = iconSize;
+        toolbar->updateOrientationStyling();
+    });
 
     q->setMovable(!KisToolBar::toolBarsLocked());
 
@@ -786,6 +808,9 @@ KisToolBar::KisToolBar(const QString &objectName, QWidget *parent, bool readConf
     if (QMainWindow *mw = qobject_cast<QMainWindow *>(parent)) {
         mw->addToolBar(this);
     }
+
+    // Apply initial orientation styling (vertical toolbars need smaller icons and padding)
+    updateOrientationStyling();
 }
 
 KisToolBar::~KisToolBar()
@@ -1402,6 +1427,71 @@ void KisToolBar::emitToolbarStyleChanged()
     QDBusMessage message = QDBusMessage::createSignal(QStringLiteral("/KisToolBar"), QStringLiteral("org.kde.KisToolBar"), QStringLiteral("styleChanged"));
     QDBusConnection::sessionBus().send(message);
 #endif
+}
+
+void KisToolBar::updateOrientationStyling()
+{
+    const int normalIconSize = d->iconSizeSettings.currentValue();
+
+    if (orientation() == Qt::Vertical) {
+        // Use configurable icon size for vertical toolbars
+        const int verticalIconSize = Private::s_verticalIconSize;
+        const int verticalButtonSize = verticalIconSize + 10; // Add margin around icon
+
+        setIconSize(QSize(verticalIconSize, verticalIconSize));
+
+        // No extra padding, just remove border
+        setStyleSheet(QStringLiteral("QToolBar { border: none; }"));
+
+        // Force icons-only style for vertical toolbars (no text)
+        setToolButtonStyle(Qt::ToolButtonIconOnly);
+
+        // Set button sizes and ensure icons-only for each button
+        Q_FOREACH (QAction *action, actions()) {
+            QWidget *widget = widgetForAction(action);
+            QToolButton *tb = qobject_cast<QToolButton *>(widget);
+            if (tb && !action->icon().isNull()) {
+                tb->setToolButtonStyle(Qt::ToolButtonIconOnly);
+                tb->setFixedSize(verticalButtonSize, verticalButtonSize);
+            }
+        }
+
+        // Center items in the toolbar layout
+        if (layout()) {
+            for (int i = 0; i < layout()->count(); ++i) {
+                QLayoutItem *item = layout()->itemAt(i);
+                if (item) {
+                    item->setAlignment(Qt::AlignHCenter);
+                }
+            }
+        }
+    } else {
+        // Restore normal icon size
+        const int normalButtonSize = 32;
+        setIconSize(QSize(normalIconSize, normalIconSize));
+
+        // Restore normal stylesheet (no padding, no border)
+        setStyleSheet(QStringLiteral("QToolBar { border: none; }"));
+
+        // Restore all button sizes to normal
+        Q_FOREACH (QAction *action, actions()) {
+            QWidget *widget = widgetForAction(action);
+            QToolButton *tb = qobject_cast<QToolButton *>(widget);
+            if (tb && !action->icon().isNull()) {
+                tb->setFixedSize(normalButtonSize, normalButtonSize);
+            }
+        }
+
+        // Restore default alignment
+        if (layout()) {
+            for (int i = 0; i < layout()->count(); ++i) {
+                QLayoutItem *item = layout()->itemAt(i);
+                if (item) {
+                    item->setAlignment(Qt::Alignment());
+                }
+            }
+        }
+    }
 }
 
 #include "moc_ktoolbar.cpp"

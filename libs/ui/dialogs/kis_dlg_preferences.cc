@@ -361,6 +361,7 @@ GeneralTab::GeneralTab(QWidget *_parent, const char *_name)
     cmbTouchPainting->setCurrentIndex(int(cfg.touchPainting()));
 
     chkEnableTransformToolAfterPaste->setChecked(cfg.activateTransformToolAfterPaste());
+    chkZoomHorizontally->setChecked(cfg.zoomHorizontal());
 
     chkEnableLongPress->setChecked(cfg.longPressEnabled());
 
@@ -380,6 +381,7 @@ GeneralTab::GeneralTab(QWidget *_parent, const char *_name)
     m_chkKineticScrollingHideScrollbars->setChecked(cfg.kineticScrollingHiddenScrollbars());
 
     intZoomMarginSize->setValue(cfg.zoomMarginSize());
+    intToolBoxIconSize->setValue(cfg.verticalToolbarIconSize());
 
     //
     // File handling
@@ -753,9 +755,11 @@ void GeneralTab::setDefault()
     m_kineticScrollingSensitivitySlider->setValue(cfg.kineticScrollingSensitivity(true));
     m_chkKineticScrollingHideScrollbars->setChecked(cfg.kineticScrollingHiddenScrollbars(true));
     intZoomMarginSize->setValue(cfg.zoomMarginSize(true));
+    intToolBoxIconSize->setValue(cfg.verticalToolbarIconSize(true));
     m_chkSwitchSelectionCtrlAlt->setChecked(cfg.switchSelectionCtrlAlt(true));
     cmbTouchPainting->setCurrentIndex(int(cfg.touchPainting(true)));
     chkEnableTransformToolAfterPaste->setChecked(cfg.activateTransformToolAfterPaste(true));
+    chkZoomHorizontally->setChecked(cfg.zoomHorizontal(true));
     m_chkConvertOnImport->setChecked(cfg.convertToImageColorspaceOnImport(true));
 
     KoColor cursorColor(KoColorSpaceRegistry::instance()->rgb8());
@@ -966,6 +970,11 @@ bool GeneralTab::kineticScrollingHiddenScrollbars()
 int GeneralTab::zoomMarginSize()
 {
     return intZoomMarginSize->value();
+}
+
+int GeneralTab::verticalToolbarIconSize()
+{
+    return intToolBoxIconSize->value();
 }
 
 bool GeneralTab::switchSelectionCtrlAlt()
@@ -2486,10 +2495,12 @@ bool KisDlgPreferences::editPreferences()
         cfg.setKineticScrollingHideScrollbars(m_general->kineticScrollingHiddenScrollbars());
 
         cfg.setZoomMarginSize(m_general->zoomMarginSize());
+        cfg.setVerticalToolbarIconSize(m_general->verticalToolbarIconSize());
 
         cfg.setSwitchSelectionCtrlAlt(m_general->switchSelectionCtrlAlt());
         cfg.setTouchPainting(KisConfig::TouchPainting(m_general->cmbTouchPainting->currentIndex()));
         cfg.setActivateTransformToolAfterPaste(m_general->chkEnableTransformToolAfterPaste->isChecked());
+        cfg.setZoomHorizontal(m_general->chkZoomHorizontally->isChecked());
         cfg.setConvertToImageColorspaceOnImport(m_general->convertToImageColorspaceOnImport());
         cfg.setUndoStackLimit(m_general->undoStackSize());
         cfg.setCumulativeUndoRedo(m_general->chkCumulativeUndo->isChecked());

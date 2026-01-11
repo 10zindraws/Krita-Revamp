@@ -40,6 +40,8 @@ public:
 
     void notifyLongPressChanged(bool enabled);
 
+    void notifyToolBoxIconSizeChanged(int iconSize);
+
 Q_SIGNALS:
     /**
      * This signal is emitted whenever notifyConfigChanged() is called.
@@ -50,6 +52,7 @@ Q_SIGNALS:
     void touchPaintingChanged();
     void sigColorSamplerPreviewStyleChanged();
     void sigLongPressChanged(bool enabled);
+    void sigToolBoxIconSizeChanged(int iconSize);
 private:
     KisConfigNotifier(const KisConfigNotifier&);
     KisConfigNotifier operator=(const KisConfigNotifier&);

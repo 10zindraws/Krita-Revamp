@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=separatebrusheraser
+X-Python-2-Compatible=false
+X-Krita-Manual=separatebrusheraser.txt
+Name=Separate Brush and Eraser
+Comment=Creates hotkeys that treat brush and eraser like separate tools.

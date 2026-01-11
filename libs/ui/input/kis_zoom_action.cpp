@@ -297,11 +297,11 @@ void KisZoomAction::cursorMovedAbsolute(const QPointF &startPos, const QPointF &
     if (d->mode == ZoomModeShortcut ||
         d->mode == RelativeZoomModeShortcut) {
 
-        const qreal zoom = inputManager()->canvas()->viewManager()->zoomController()->zoomAction()->effectiveZoom();
-        const qreal logDistance = std::pow(2.0, qreal(diff.y()) / qreal(stepCont));
-
         KisConfig cfg(true);
-        qreal newZoom = zoom;
+
+        const qreal logDistance = std::pow(2.0, qreal(cfg.zoomHorizontal() ? -diff.x() : diff.y()) / qreal(stepCont));
+
+        qreal newZoom = 1.0;
         if (cfg.readEntry<bool>("InvertMiddleClickZoom", false)) {
             newZoom = d->startZoom / logDistance;
         } else {
@@ -311,6 +311,7 @@ void KisZoomAction::cursorMovedAbsolute(const QPointF &startPos, const QPointF &
         if (d->mode == ZoomModeShortcut) {
             inputManager()->canvas()->viewManager()->zoomController()->setZoom(KoZoomMode::ZOOM_CONSTANT, newZoom);
         } else {
+            const qreal zoom = inputManager()->canvas()->viewManager()->zoomController()->zoomAction()->effectiveZoom();
             const qreal coeff = newZoom / zoom;
 
             KoCanvasControllerWidget *controller =
@@ -327,13 +328,16 @@ void KisZoomAction::cursorMovedAbsolute(const QPointF &startPos, const QPointF &
         QPoint stillPoint = d->mode == RelativeDiscreteZoomModeShortcut ?
             startPos.toPoint() : QPoint();
 
-        qreal currentDiff = qreal(diff.y()) / stepDisc - d->lastDiscreteZoomDistance;
+        KisConfig cfg(true);
 
-        bool zoomIn = currentDiff > 0;
+        qreal axisDiff = qreal(cfg.zoomHorizontal() ? -diff.x() : diff.y());
+        qreal currentDiff = axisDiff / stepDisc - d->lastDiscreteZoomDistance;
+
+        const bool zoomIn = currentDiff > 0;
         while (qAbs(currentDiff) > 1.0) {
             d->zoomTo(zoomIn, stillPoint);
             d->lastDiscreteZoomDistance += zoomIn ? 1.0 : -1.0;
-            currentDiff = qreal(diff.y()) / stepDisc - d->lastDiscreteZoomDistance;
+            currentDiff = axisDiff / stepDisc - d->lastDiscreteZoomDistance;
         }
     }
 }

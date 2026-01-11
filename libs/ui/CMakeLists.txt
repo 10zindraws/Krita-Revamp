@@ -228,6 +228,7 @@ set(kritaui_LIB_SRCS
     tool/strokes/move_stroke_strategy.cpp
     tool/strokes/KisNodeSelectionRecipe.cpp
     tool/KisSelectionToolFactoryBase.cpp
+    tool/KisSelectionToolHoldAction.cpp
     tool/KisToolPaintFactoryBase.cpp
     tool/KisAsyncColorSamplerHelper.cpp
 

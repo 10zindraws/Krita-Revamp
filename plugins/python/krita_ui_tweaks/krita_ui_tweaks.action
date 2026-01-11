@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ActionCollection version="2" name="Scripts">
+    <Actions category="Scripts">
+        <text>Krita UI Tweaks</text>
+        <Action name="krita_ui_tweaks_next_tab">
+            <icon></icon>
+            <text>Goto next tab</text>
+        </Action>
+        <Action name="krita_ui_tweaks_prev_tab">
+            <icon></icon>
+            <text>Goto previous tab</text>
+        </Action>
+    </Actions>
+</ActionCollection>

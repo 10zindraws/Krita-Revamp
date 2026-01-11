@@ -156,6 +156,9 @@ public:
 protected Q_SLOTS:
     virtual void slotMovableChanged(bool movable);
 
+private:
+    void updateOrientationStyling();
+
 protected:
     void contextMenuEvent(QContextMenuEvent *) override;
     void actionEvent(QActionEvent *) override;

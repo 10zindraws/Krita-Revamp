@@ -64,3 +64,8 @@ void KisConfigNotifier::notifyLongPressChanged(bool enabled)
 {
     Q_EMIT sigLongPressChanged(enabled);
 }
+
+void KisConfigNotifier::notifyToolBoxIconSizeChanged(int iconSize)
+{
+    Q_EMIT sigToolBoxIconSizeChanged(iconSize);
+}

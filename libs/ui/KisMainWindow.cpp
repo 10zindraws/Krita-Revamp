@@ -152,6 +152,7 @@
 #include <KisResourceUserOperations.h>
 #include "KisRecentFilesManager.h"
 #include <config-qmdiarea-always-show-subwindow-title.h>
+#include "tool/KisSelectionToolHoldAction.h"
 
 #include <mutex>
 
@@ -459,9 +460,30 @@ KisMainWindow::KisMainWindow(QUuid uuid)
 
     // Load all the actions from the tool plugins
     // ToolBoxDocker needs them when at setViewManager()
+    
+    // Selection tools that should have hold-to-switch-to-move-tool behavior
+    const QStringList selectionToolIds = {
+        "KisToolSelectOutline",      // Freehand Selection Tool
+        "KisToolSelectElliptical",   // Elliptical Selection Tool
+        "KisToolSelectRectangular",  // Rectangular Selection Tool
+        "KisToolSelectPolygonal"     // Polygonal Selection Tool
+    };
+    
     Q_FOREACH(KoToolFactoryBase *toolFactory, KoToolRegistry::instance()->values()) {
         toolFactory->createActions(actionCollection());
+        
+        // Register selection tool actions with the hold manager
+        const QString toolId = toolFactory->id();
+        if (selectionToolIds.contains(toolId)) {
+            QAction *action = actionCollection()->action(toolId);
+            if (action) {
+                KisSelectionToolHoldManager::instance()->registerToolAction(toolId, action);
+            }
+        }
     }
+    
+    // Install the selection tool hold manager event filter
+    KisSelectionToolHoldManager::instance()->install();
 
 
     Q_FOREACH (QDockWidget *wdg, dockWidgets()) {

@@ -462,6 +462,35 @@
             </property>
            </widget>
           </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="lblToolBoxIconSize">
+            <property name="text">
+             <string>Vertical Toolbar Icon Size:</string>
+            </property>
+            <property name="buddy">
+             <cstring>intToolBoxIconSize</cstring>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="KisIntParseSpinBox" name="intToolBoxIconSize">
+            <property name="toolTip">
+             <string>Size of the action icons in vertical toolbars, in pixels</string>
+            </property>
+            <property name="suffix">
+             <string> px</string>
+            </property>
+            <property name="minimum">
+             <number>8</number>
+            </property>
+            <property name="maximum">
+             <number>128</number>
+            </property>
+            <property name="value">
+             <number>22</number>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
@@ -790,14 +819,24 @@
          </property>
         </widget>
        </item>
-       <item row="6" column="0">
+       <item row="6" column="1">
+        <widget class="QCheckBox" name="chkZoomHorizontally">
+         <property name="text">
+          <string>Zoom with horizontal scrolling</string>
+         </property>
+         <property name="toolTip">
+          <string>When enabled, moving the cursor horizontally (instead of vertically) while in zoom mode will zoom in/out</string>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="0">
         <widget class="QLabel" name="lblZoomSteps">
          <property name="text">
           <string>Zoom steps between powers of 2</string>
          </property>
         </widget>
        </item>
-       <item row="6" column="1">
+       <item row="7" column="1">
         <widget class="QSpinBox" name="spnZoomSteps">
          <property name="minimum">
           <number>1</number>
@@ -807,7 +846,7 @@
          </property>
         </widget>
        </item>
-       <item row="7" column="0" colspan="2">
+       <item row="8" column="0" colspan="2">
         <widget class="QGroupBox" name="m_groupBoxKineticScrollingSettings">
          <property name="title">
           <string>Kinetic Scrolling (needs restart)</string>

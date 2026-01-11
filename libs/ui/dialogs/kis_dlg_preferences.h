@@ -94,6 +94,7 @@ public:
     int kineticScrollingSensitivity();
     bool kineticScrollingHiddenScrollbars();
     int zoomMarginSize();
+    int verticalToolbarIconSize();
     bool switchSelectionCtrlAlt();
     bool convertToImageColorspaceOnImport();
     bool autopinLayersToTimeline();

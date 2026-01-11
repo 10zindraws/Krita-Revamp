@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=quick_brush_size
+X-Python-2-Compatible=false
+X-Krita-Manual=Manual.html
+Name=Quick Brush Size
+Comment=An accelerated version of the increase/decrease brush size shortcuts with configurable settings docker
+
+[Desktop Action accel_decrease_brush_size]
+Name=Quick Decrease Brush Size
+
+[Desktop Action accel_increase_brush_size]
+Name=Quick Increase Brush Size

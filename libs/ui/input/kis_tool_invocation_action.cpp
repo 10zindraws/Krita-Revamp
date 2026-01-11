@@ -20,11 +20,20 @@
 #include "kis_input_manager.h"
 #include "kis_image.h"
 
+namespace {
+bool isFreehandBrushToolActive()
+{
+    return KoToolManager::instance()->activeToolId() == QStringLiteral("KritaShape/KisToolBrush");
+}
+} // namespace
+
 class KisToolInvocationAction::Private
 {
 public:
     bool active {false};
     bool deactivating {false};
+    bool temporaryToolActivated {false};
+    bool lineToolActivatedFromFreehand {false};
 
     QPointer<KisToolProxy> activatedToolProxy;
     QPointer<KisToolProxy> runningToolProxy;
@@ -63,8 +72,17 @@ KisToolInvocationAction::~KisToolInvocationAction()
 
 void KisToolInvocationAction::activate(int shortcut)
 {
-    Q_UNUSED(shortcut);
     if (!inputManager()) return;
+
+    d->temporaryToolActivated = false;
+    if (shortcut == LineToolShortcut) {
+        d->lineToolActivatedFromFreehand = isFreehandBrushToolActive();
+        if (!d->lineToolActivatedFromFreehand) {
+            return;
+        }
+    } else {
+        d->lineToolActivatedFromFreehand = false;
+    }
 
     QString temporaryToolId;
     switch(shortcut) {
@@ -105,16 +123,21 @@ void KisToolInvocationAction::activate(int shortcut)
 
     if (!temporaryToolId.isEmpty()) {
         KoToolManager::instance()->switchToolRequested(temporaryToolId);
+        d->temporaryToolActivated = true;
     }
 
     d->activatedToolProxy = inputManager()->toolProxy();
+
     d->activatedToolProxy->activateToolAction(KisTool::Primary);
 }
 
 void KisToolInvocationAction::deactivate(int shortcut)
 {
-    Q_UNUSED(shortcut);
-    if (!inputManager()) return;
+    if (!inputManager()) {
+        d->temporaryToolActivated = false;
+        d->lineToolActivatedFromFreehand = false;
+        return;
+    }
 
     /**
      * Activate call might have come before actual input manager or tool proxy
@@ -125,12 +148,19 @@ void KisToolInvocationAction::deactivate(int shortcut)
         d->activatedToolProxy.clear();
     }
 
-    if (shortcut != ActivateShortcut && shortcut != ConfirmShortcut && shortcut != CancelShortcut && !d->deactivating) {
+    if (d->temporaryToolActivated &&
+        shortcut != ActivateShortcut &&
+        shortcut != ConfirmShortcut &&
+        shortcut != CancelShortcut &&
+        !d->deactivating) {
         // Switching tool will force deactivation and will re-enter
         d->deactivating = true;
         KoToolManager::instance()->switchBackRequested();
         d->deactivating = false;
     }
+
+    d->temporaryToolActivated = false;
+    d->lineToolActivatedFromFreehand = false;
 }
 
 int KisToolInvocationAction::priority() const
@@ -240,6 +270,10 @@ bool KisToolInvocationAction::isShortcutRequired(int shortcut) const
 
 KisInputActionGroup KisToolInvocationAction::inputActionGroup(int shortcut) const
 {
-    Q_UNUSED(shortcut);
+    if (shortcut == LineToolShortcut &&
+        !d->lineToolActivatedFromFreehand &&
+        !isFreehandBrushToolActive()) {
+        return NoActionGroup;
+    }
     return ToolInvoactionActionGroup;
 }

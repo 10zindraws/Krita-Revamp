@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=quickexportdocker
+X-Python-2-Compatible=false
+Name=Quick Export Docker
+Comment=A docker for quick export functionality.

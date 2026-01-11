@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=krita_work_timer
+X-Python-2-Compatible=false
+X-Krita-Manual=Manual.html
+Name=Krita Work Timer
+Comment=A work timer to track your productive time in Krita.

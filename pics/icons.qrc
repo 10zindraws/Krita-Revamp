@@ -313,5 +313,7 @@
         <file>24_light_zoom-fit-best.svg</file>
         <file>16_dark_warning.svg</file>
         <file>16_light_warning.svg</file>
+        <file>psclosedfolder.png</file>
+        <file>psopenfolder.png</file>
     </qresource>
 </RCC>

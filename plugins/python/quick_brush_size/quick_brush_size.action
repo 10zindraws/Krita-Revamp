@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ActionCollection version="2" name="Scripts">
+    <Actions category="Scripts">
+        <text>Quick Brush Size</text>
+
+        <Action name="accel_decrease_brush_size">
+            <icon></icon>
+            <text>Quick Decrease Brush Size</text>
+            <whatsThis>Decrease brush size with acceleration - the longer you hold, the faster it changes</whatsThis>
+            <toolTip>Accelerating brush size decrease</toolTip>
+            <iconText>Quick Decrease</iconText>
+            <activationFlags>10000</activationFlags>
+            <activationConditions>0</activationConditions>
+            <shortcut></shortcut>
+            <isCheckable>false</isCheckable>
+            <statusTip>Hold to decrease brush size with acceleration</statusTip>
+        </Action>
+
+        <Action name="accel_increase_brush_size">
+            <icon></icon>
+            <text>Quick Increase Brush Size</text>
+            <whatsThis>Increase brush size with acceleration - the longer you hold, the faster it changes</whatsThis>
+            <toolTip>Accelerating brush size increase</toolTip>
+            <iconText>Quick Increase</iconText>
+            <activationFlags>10000</activationFlags>
+            <activationConditions>0</activationConditions>
+            <shortcut></shortcut>
+            <isCheckable>false</isCheckable>
+            <statusTip>Hold to increase brush size with acceleration</statusTip>
+        </Action>
+    </Actions>
+</ActionCollection>

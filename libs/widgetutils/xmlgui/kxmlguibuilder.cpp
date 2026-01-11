@@ -18,9 +18,11 @@
 #include <QObject>
 #include <QMutableStringListIterator>
 #include <QAction>
+#include <QWidgetAction>
 #include <QMenu>
 #include <QMenuBar>
 #include <QStatusBar>
+#include <QFrame>
 #include <QDebug>
 
 #include <kis_icon_utils.h>
@@ -49,6 +51,10 @@ public:
     QString tagTearOffHandle;
     QString tagMenuTitle;
 
+    QString tagSpacer5;
+    QString tagSpacer10;
+    QString tagSpacer30;
+
     QString attrName;
     QString attrLineSeparator;
 
@@ -76,6 +82,10 @@ KisKXMLGUIBuilder::KisKXMLGUIBuilder(QWidget *widget)
     d->tagSeparator = QStringLiteral("separator");
     d->tagTearOffHandle = QStringLiteral("tearoffhandle");
     d->tagMenuTitle = QStringLiteral("title");
+
+    d->tagSpacer5 = QStringLiteral("spacer5");
+    d->tagSpacer10 = QStringLiteral("spacer10");
+    d->tagSpacer30 = QStringLiteral("spacer30");
 
     d->attrName = QStringLiteral("name");
     d->attrLineSeparator = QStringLiteral("lineseparator");
@@ -279,7 +289,8 @@ void KisKXMLGUIBuilder::removeContainer(QWidget *container, QWidget *parent, QDo
 QStringList KisKXMLGUIBuilder::customTags() const
 {
     QStringList res;
-    res << d->tagSeparator << d->tagTearOffHandle << d->tagMenuTitle;
+    res << d->tagSeparator << d->tagTearOffHandle << d->tagMenuTitle
+        << d->tagSpacer5 << d->tagSpacer10 << d->tagSpacer30;
     return res;
 }
 
@@ -357,6 +368,45 @@ QAction *KisKXMLGUIBuilder::createCustomElement(QWidget *parent, int index, cons
             } else {
                 return m->insertSection(before, i18nText);
             }
+        }
+    } else if (tagName == d->tagSpacer5 || tagName == d->tagSpacer10 || tagName == d->tagSpacer30) {
+        // Handle fixed-size spacer elements for toolbars only
+        if (KisToolBar *bar = qobject_cast<KisToolBar *>(parent)) {
+            int spacerSize = 5;
+            if (tagName == d->tagSpacer10) {
+                spacerSize = 10;
+            } else if (tagName == d->tagSpacer30) {
+                spacerSize = 30;
+            }
+
+            // Create a fixed-size invisible widget as a spacer
+            QFrame *spacerWidget = new QFrame(bar);
+            spacerWidget->setFrameShape(QFrame::NoFrame);
+            spacerWidget->setObjectName(QStringLiteral("spacer_%1").arg(spacerSize));
+
+            // Set size based on toolbar orientation
+            if (bar->orientation() == Qt::Vertical) {
+                spacerWidget->setFixedSize(1, spacerSize);
+            } else {
+                spacerWidget->setFixedSize(spacerSize, 1);
+            }
+
+            // Use QWidgetAction to embed the spacer widget in the toolbar
+            QWidgetAction *spacerAction = new QWidgetAction(bar);
+            spacerAction->setDefaultWidget(spacerWidget);
+            spacerAction->setObjectName(QStringLiteral("spacer_%1_action").arg(spacerSize));
+            bar->insertAction(before, spacerAction);
+
+            // Connect to orientation changes to update spacer size
+            QObject::connect(bar, &QToolBar::orientationChanged, spacerWidget, [spacerWidget, spacerSize](Qt::Orientation orientation) {
+                if (orientation == Qt::Vertical) {
+                    spacerWidget->setFixedSize(1, spacerSize);
+                } else {
+                    spacerWidget->setFixedSize(spacerSize, 1);
+                }
+            });
+
+            return spacerAction;
         }
     }
 

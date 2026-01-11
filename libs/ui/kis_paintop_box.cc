@@ -20,6 +20,7 @@
 #include <QWidgetAction>
 #include <QApplication>
 #include <QMenu>
+#include <QMetaObject>
 #include <QTime>
 
 #include <kis_debug.h>
@@ -79,6 +80,7 @@
 #include "KisResourceLoaderRegistry.h"
 #include "kis_acyclic_signal_connector.h"
 #include "KisMainWindow.h"
+#include "tool/kis_smoothing_options.h"
 
 
 KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const char *name)
@@ -248,6 +250,7 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
         KisDoubleSliderSpinBox* slSize;
         KisAngleSelector* slRotation;
         KisMultipliersDoubleSliderSpinBox* slPatternSize;
+        KisDoubleSliderSpinBox* slSmoothing;
 
         if (sliderLabels) {
             slOpacity     = m_sliderChooser[i]->addWidget<KisDoubleSliderSpinBox>("opacity");
@@ -255,12 +258,14 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
             slSize        = m_sliderChooser[i]->addWidget<KisDoubleSliderSpinBox>("size");
             slRotation    = m_sliderChooser[i]->addWidget<KisAngleSelector>("rotation");
             slPatternSize = m_sliderChooser[i]->addWidget<KisMultipliersDoubleSliderSpinBox>("patternsize");
+            slSmoothing   = m_sliderChooser[i]->addWidget<KisDoubleSliderSpinBox>("smoothing");
 
             slOpacity->setPrefix(QString("%1 ").arg(i18n("Opacity:")));
             slFlow->setPrefix(QString("%1 ").arg(i18n("Flow:")));
             slSize->setPrefix(QString("%1 ").arg(i18n("Size:")));
             slRotation->setPrefix(QString("%1 ").arg(i18n("Rotation:")));
             slPatternSize->setPrefix(QString("%1 ").arg(i18n("Pattern Scale:")));
+            slSmoothing->setPrefix(QString("%1 ").arg(i18n("Smoothing:")));
         }
         else {
             slOpacity     = m_sliderChooser[i]->addWidget<KisDoubleSliderSpinBox>("opacity", i18n("Opacity:"));
@@ -268,6 +273,7 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
             slSize        = m_sliderChooser[i]->addWidget<KisDoubleSliderSpinBox>("size", i18n("Size:"));
             slRotation    = m_sliderChooser[i]->addWidget<KisAngleSelector>("rotation", i18n("Rotation:"));
             slPatternSize = m_sliderChooser[i]->addWidget<KisMultipliersDoubleSliderSpinBox>("patternsize", i18n("Pattern Scale:"));
+            slSmoothing   = m_sliderChooser[i]->addWidget<KisDoubleSliderSpinBox>("smoothing", i18n("Smoothing:"));
         }
 
         slOpacity->setRange(0, 100, 0);
@@ -312,6 +318,14 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
         slPatternSize->setMinimumWidth(qMax(sliderWidth, slPatternSize->sizeHint().width()));
         slPatternSize->setFixedHeight(buttonsize);
         slPatternSize->setBlockUpdateSignalOnDrag(true);
+        // Smoothing slider: 0% = No Smoothing, 1-100% = Stabilizer with sample count 3-100
+        slSmoothing->setRange(0, 100, 0);
+        slSmoothing->setValue(0);
+        slSmoothing->setSingleStep(1);
+        slSmoothing->setSuffix(i18n("%"));
+        slSmoothing->setMinimumWidth(qMax(sliderWidth, slSmoothing->sizeHint().width()));
+        slSmoothing->setFixedHeight(buttonsize);
+        slSmoothing->setBlockUpdateSignalOnDrag(true);
 
         m_sliderChooser[i]->setMinimumWidth(qMax(sliderWidth, slPatternSize->sizeHint().width()));
 
@@ -516,22 +530,26 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
     connect(m_sliderChooser[0]->getWidget<KisDoubleSliderSpinBox>("size")                  , SIGNAL(valueChanged(qreal)), SLOT(slotSlider1Changed()));
     connect(m_sliderChooser[0]->getWidget<KisAngleSelector>("rotation")                    , SIGNAL(angleChanged(qreal)), SLOT(slotSlider1Changed()));
     connect(m_sliderChooser[0]->getWidget<KisMultipliersDoubleSliderSpinBox>("patternsize"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider1Changed()));
+    connect(m_sliderChooser[0]->getWidget<KisDoubleSliderSpinBox>("smoothing"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider1Changed()));
     connect(m_sliderChooser[1]->getWidget<KisDoubleSliderSpinBox>("opacity")               , SIGNAL(valueChanged(qreal)), SLOT(slotSlider2Changed()));
     connect(m_sliderChooser[1]->getWidget<KisDoubleSliderSpinBox>("flow")                  , SIGNAL(valueChanged(qreal)), SLOT(slotSlider2Changed()));
     connect(m_sliderChooser[1]->getWidget<KisDoubleSliderSpinBox>("size")                  , SIGNAL(valueChanged(qreal)), SLOT(slotSlider2Changed()));
     connect(m_sliderChooser[1]->getWidget<KisAngleSelector>("rotation")                    , SIGNAL(angleChanged(qreal)), SLOT(slotSlider2Changed()));
     connect(m_sliderChooser[1]->getWidget<KisMultipliersDoubleSliderSpinBox>("patternsize"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider2Changed()));
     connect(m_sliderChooser[2]->getWidget<KisDoubleSliderSpinBox>("opacity")               , SIGNAL(valueChanged(qreal)), SLOT(slotSlider3Changed()));
+    connect(m_sliderChooser[1]->getWidget<KisDoubleSliderSpinBox>("smoothing"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider2Changed()));
     connect(m_sliderChooser[2]->getWidget<KisDoubleSliderSpinBox>("flow")                  , SIGNAL(valueChanged(qreal)), SLOT(slotSlider3Changed()));
     connect(m_sliderChooser[2]->getWidget<KisDoubleSliderSpinBox>("size")                  , SIGNAL(valueChanged(qreal)), SLOT(slotSlider3Changed()));
     connect(m_sliderChooser[2]->getWidget<KisAngleSelector>("rotation")                    , SIGNAL(angleChanged(qreal)), SLOT(slotSlider3Changed()));
     connect(m_sliderChooser[2]->getWidget<KisMultipliersDoubleSliderSpinBox>("patternsize"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider3Changed()));
     connect(m_sliderChooser[3]->getWidget<KisDoubleSliderSpinBox>("opacity")               , SIGNAL(valueChanged(qreal)), SLOT(slotSlider4Changed()));
+    connect(m_sliderChooser[2]->getWidget<KisDoubleSliderSpinBox>("smoothing"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider3Changed()));
     connect(m_sliderChooser[3]->getWidget<KisDoubleSliderSpinBox>("flow")                  , SIGNAL(valueChanged(qreal)), SLOT(slotSlider4Changed()));
     connect(m_sliderChooser[3]->getWidget<KisDoubleSliderSpinBox>("size")                  , SIGNAL(valueChanged(qreal)), SLOT(slotSlider4Changed()));
     connect(m_sliderChooser[3]->getWidget<KisAngleSelector>("rotation")                    , SIGNAL(angleChanged(qreal)), SLOT(slotSlider4Changed()));
     connect(m_sliderChooser[3]->getWidget<KisMultipliersDoubleSliderSpinBox>("patternsize"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider4Changed()));
 
+    connect(m_sliderChooser[3]->getWidget<KisDoubleSliderSpinBox>("smoothing"), SIGNAL(valueChanged(qreal)), SLOT(slotSlider4Changed()));
     connect(m_resourceProvider, SIGNAL(sigFGColorUsed(KoColor)), m_favoriteResourceManager, SLOT(slotAddRecentColor(KoColor)));
 
     connect(m_resourceProvider, SIGNAL(sigFGColorChanged(KoColor)), m_favoriteResourceManager, SLOT(slotChangeFGColorSelector(KoColor)));
@@ -718,6 +736,19 @@ void KisPaintopBox::setCurrentPaintop(KisPaintOpPresetSP preset)
 
     if (preset->settings()->hasPatternSettings()) {
         setMultiplierSliderValue("patternsize", preset->settings()->paintOpPatternSize());
+    }
+    // Sync smoothing slider from global config
+    {
+        KisConfig cfg(true);
+        int smoothingType = cfg.lineSmoothingType();
+        int smoothingValue = 0;
+        if (smoothingType == KisSmoothingOptions::STABILIZER) {
+            int sampleCount = static_cast<int>(cfg.lineSmoothingDistance());
+            sampleCount = qBound(3, sampleCount, 100);
+            smoothingValue = 1 + (sampleCount - 3) * 99 / 97;
+            smoothingValue = qBound(1, smoothingValue, 100);
+        }
+        setSliderValue("smoothing", smoothingValue);
     }
 
     // MyPaint brushes don't support custom blend modes, they always perform "Normal and Erase" blending.
@@ -1167,6 +1198,7 @@ void KisPaintopBox::sliderChanged(int n)
     qreal size        = m_sliderChooser[n]->getWidget<KisDoubleSliderSpinBox>("size")->value();
     qreal rotation    = m_sliderChooser[n]->getWidget<KisAngleSelector>("rotation")->angle();
     qreal patternsize = m_sliderChooser[n]->getWidget<KisMultipliersDoubleSliderSpinBox>("patternsize")->value();
+    int smoothing     = static_cast<int>(m_sliderChooser[n]->getWidget<KisDoubleSliderSpinBox>("smoothing")->value());
 
 
     setSliderValue("opacity", opacity);
@@ -1175,6 +1207,7 @@ void KisPaintopBox::sliderChanged(int n)
     setAngleSliderValue("rotation", rotation);
     setMultiplierSliderValue("patternsize", patternsize);
 
+    setSliderValue("smoothing", smoothing);
     if (m_presetsEnabled) {
         // IMPORTANT: set the PaintOp size before setting the other properties
         //            it won't work the other way
@@ -1185,6 +1218,47 @@ void KisPaintopBox::sliderChanged(int n)
         m_resourceProvider->setPatternSize(patternsize);
         m_resourceProvider->setOpacity(opacity);
         m_resourceProvider->setFlow(flow);
+        // Apply smoothing settings: 0% = No Smoothing, 1-100% = Stabilizer with sample count 3-100
+        {
+            KisConfig cfg(false);
+            const bool useStabilizer = smoothing > 0;
+            int sampleCount = 0;
+            if (smoothing == 0) {
+                cfg.setLineSmoothingType(KisSmoothingOptions::NO_SMOOTHING);
+            } else {
+                cfg.setLineSmoothingType(KisSmoothingOptions::STABILIZER);
+                // Map percentage (1-100) to sample count (3-100)
+                sampleCount = 3 + (smoothing - 1) * 97 / 99;
+                cfg.setLineSmoothingDistance(sampleCount);
+            }
+            // Keep the active freehand tool in sync since it doesn't auto-reload config.
+            if (m_viewManager->canvasBase()) {
+                const QString toolId = KoToolManager::instance()->activeToolId();
+                KisTool *tool = dynamic_cast<KisTool*>(
+                    KoToolManager::instance()->toolById(m_viewManager->canvasBase(), toolId));
+                if (tool) {
+                    const int smoothingType = useStabilizer
+                        ? KisSmoothingOptions::STABILIZER
+                        : KisSmoothingOptions::NO_SMOOTHING;
+                    const bool appliedType = QMetaObject::invokeMethod(
+                        tool,
+                        "slotSetSmoothingType",
+                        Qt::DirectConnection,
+                        Q_ARG(int, smoothingType));
+                    bool appliedDistance = false;
+                    if (useStabilizer) {
+                        appliedDistance = QMetaObject::invokeMethod(
+                            tool,
+                            "slotSetSmoothnessDistance",
+                            Qt::DirectConnection,
+                            Q_ARG(qreal, static_cast<qreal>(sampleCount)));
+                    }
+                    if (appliedType || appliedDistance) {
+                        tool->updateSettingsViews();
+                    }
+                }
+            }
+        }
 
 
         KisLockedPropertiesProxySP propertiesProxy = KisLockedPropertiesServer::instance()->createLockedPropertiesProxy(m_resourceProvider->currentPreset()->settings());
@@ -1252,6 +1326,19 @@ void KisPaintopBox::slotToolChanged(KoCanvasController* canvas)
 
             {
                 setMultiplierSliderValue("patternsize", m_resourceProvider->currentPreset()->settings()->paintOpPatternSize());
+                // Sync smoothing slider from global config
+                {
+                    KisConfig cfg(true);
+                    int smoothingType = cfg.lineSmoothingType();
+                    int smoothingValue = 0;
+                    if (smoothingType == KisSmoothingOptions::STABILIZER) {
+                        int sampleCount = static_cast<int>(cfg.lineSmoothingDistance());
+                        sampleCount = qBound(3, sampleCount, 100);
+                        smoothingValue = 1 + (sampleCount - 3) * 99 / 97;
+                        smoothingValue = qBound(1, smoothingValue, 100);
+                    }
+                    setSliderValue("smoothing", smoothingValue);
+                }
             }
 
             // MyPaint brushes don't support custom blend modes, they always perform "Normal and Erase" blending.

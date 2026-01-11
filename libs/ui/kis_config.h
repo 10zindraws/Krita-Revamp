@@ -602,6 +602,9 @@ public:
     int zoomMarginSize(bool defaultValue = false) const;
     void setZoomMarginSize(int zoomMarginSize);
 
+    int verticalToolbarIconSize(bool defaultValue = false) const;
+    void setVerticalToolbarIconSize(int iconSize);
+
     void setEnableOpenGLFramerateLogging(bool value) const;
     bool enableOpenGLFramerateLogging(bool defaultValue = false) const;
 
@@ -673,6 +676,9 @@ public:
     
     bool activateTransformToolAfterPaste(bool defaultValue = false) const;
     void setActivateTransformToolAfterPaste(bool value);
+
+    bool zoomHorizontal(bool defaultValue = false) const;
+    void setZoomHorizontal(bool value);
     
     enum RootSurfaceFormat {
         BT709_G22 = 0,

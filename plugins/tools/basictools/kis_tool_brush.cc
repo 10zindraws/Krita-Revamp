@@ -12,6 +12,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QSignalBlocker>
 
 #include <klocalizedstring.h>
 #include <QAction>
@@ -311,7 +312,10 @@ void KisToolBrush::updateSettingsViews()
     m_sliderDelayDistance->setValue(smoothingOptions()->delayDistance());
     m_sliderTailAggressiveness->setValue(smoothingOptions()->tailAggressiveness());
     m_chkSmoothPressure->setChecked(smoothingOptions()->smoothPressure());
-    m_chkUseScalableDistance->setChecked(smoothingOptions()->useScalableDistance());
+    {
+        QSignalBlocker blocker(m_chkUseScalableDistance);
+        m_chkUseScalableDistance->setChecked(smoothingOptions()->useScalableDistance());
+    }
     m_cmbSmoothingType->setCurrentIndex((int)smoothingOptions()->smoothingType());
     m_chkStabilizeSensors->setChecked(smoothingOptions()->stabilizeSensors());
 
