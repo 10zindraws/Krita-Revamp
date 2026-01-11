@@ -37,7 +37,9 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 - krita_work_timer
 - krita-redesign (modified PS version)
 - label-box
+<br>
 
+**Note: the plugins may not already be enabled after installing, to enable them go to the top bar of Krita and click `Settings → Python Plugin Manager → checkmark the plugins you want to use`**
 
 ## Installation
 
