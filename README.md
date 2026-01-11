@@ -22,7 +22,7 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 - dockerundercursor
 - krita_ui_tweaks (modified PS version)
 - quick_brush_size
-- separatebrusheraser
+- [separatebrusheraser](https://krita-artists.org/t/separate-brush-eraser-plugin/125172)
 - [layer_kit](https://krita-artists.org/t/layer-kit-organize-your-layers-faster/157281/18)
 - quickexportdocker <br>
 <img width="294" height="449" alt="image" src="https://github.com/user-attachments/assets/5dcb81bb-f9eb-4306-8d8e-ed35018993b5" /> <br>
