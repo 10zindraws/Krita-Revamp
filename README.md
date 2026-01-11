@@ -6,9 +6,9 @@ However, Krita 5.2.14 doesn't have some important features for a smooth workflow
 
 I've decided to modify Krita 5.2.14's source code because some features can't simply be added via plugins.
 
-Krita Revamp vs Krita 5.2.14 diffs: https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14![Picture](https://krita.org/images/hero-image-50.webp)
-
 ### Development Notes and Build Instructions
+
+Krita Revamp vs Krita 5.2.14 diffs: https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14![Picture](https://krita.org/images/hero-image-50.webp)
 
 Please follow [the online documentation](https://docs.krita.org/en/untranslatable_pages/building_krita.html).
 
