@@ -37,7 +37,7 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 
 #### Built-in plugins
 - dockerundercursor
-- krita_ui_tweaks (modified PS version)
+- krita_ui_tweaks (modified version)
 - quick_brush_size
 - [separatebrusheraser](https://krita-artists.org/t/separate-brush-eraser-plugin/125172)
 - [layer_kit](https://krita-artists.org/t/layer-kit-organize-your-layers-faster/157281/18)
@@ -47,7 +47,7 @@ Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-sett
 - super_docker-lock
 - timer_watch
 - krita_work_timer
-- krita-redesign (modified PS version)
+- krita-redesign (modified version)
 - label-box
 <br>
 
