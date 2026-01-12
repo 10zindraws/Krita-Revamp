@@ -3,11 +3,23 @@
 <img width="1920" height="1051" alt="image" src="https://github.com/user-attachments/assets/4e97e1d7-4abe-410c-953e-d7711edb7842" />
 Krita is a free and open source digital painting application. It is for artists who want to create professional work from start to end. Krita is used by comic book artists, illustrators, concept artists, matte and texture painters and in the digital VFX industry. <br>
 
-I made Krita Revamp because Krita lacks important features for those coming from Photoshop/Clip Studio paint and not all of them can be added via plugins. I chose to modify Krita 5.2.14 because it is stable and fast which makes it perfect for professionals that want a painting program that just works.
+As an artist who has experience with Photoshop and some experience with Clip Studio Paint, krita has many weird quirks that make the program unnecessarily untuitive to use.
+I made Krita Revamp because Krita (while it's a great open source painting program) gets in the way of painting sometimes with its UI and lack of important features. I've made several plugins as solutions and workarounds to make Krita easier to use but plugins alone are very limited compared to changing Krita's source code which where Krita Revamp comes into the picture.
+
+
+## Why Krita 5.2.14?
+
+It's the latest stable release which makes a strong foundation for modifications. Krita 5.3 prealpha has some minor improvements but it's currently still in development, unstable, and slower.
+
+## Why not open pull requests to improve Krita as a whole?
+
+Additional features can't be officially added to Krita 5.2.14 or 5.3 (according to their [monthly update](https://krita.org/en/posts/2025/monthly-update-33/)). Suggesting UI/UX changes and features for future versions of Krita and seeing them realized will take a long time and not all changes will be accepted.
 
 ### Features/Changes
 
 - Removed news section at welcome screen so you can see more of your recent images
+- For Photoshop users: Horizontal relative zoom (like scrubby zoom) is an option (previously only an option in 5.3 prealpha). <br>
+**Note: my plugin "Scrubby Zoom" is slower than this native implementation"** <br>
 - For Photoshop users: "Activate Line Tool" only activates when freehand brush tool is the current tool <br>
 Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-settings-photoshop-compatible-inconsistencies/32351/9?u=tenzindraws
 - Groups are shorter and use a folder icon for thumbnails like Photoshop folders
@@ -63,6 +75,14 @@ https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-l
 **Krita Revamp vs Krita 5.2.14 diffs:** <br>
 https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
 <br>
+
+### Donation
+
+Krita Revamp is a fork of Krita 5.2.14, it merely adds features and changes it's UI/UX experience. <br>
+Please donate to them for creating this amazing free open source painting program: <br>
+https://krita.org/en/donations/ <br>
+
+If you want to support my modified 
 
 ### License
 
