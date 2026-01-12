@@ -76,12 +76,16 @@ https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-l
 https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
 <br>
 
+---
+
 ### Donation
 
 - Please consider donating to the Krita Foundation:
 https://krita.org/en/donations/ <br>
 
 - If you specifically find my Krita fork useful, feel free to support me at my [ko-fi page](https://ko-fi.com/tenzindraws)
+
+---
 
 ### License
 
