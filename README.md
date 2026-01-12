@@ -78,10 +78,10 @@ https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.
 
 ### Donation
 
-Please consider donating to the Krita Foundation:
+- Please consider donating to the Krita Foundation:
 https://krita.org/en/donations/ <br>
 
-If you specifically find my Krita fork useful, my ko-fi page is under releases.
+- If you specifically find my Krita fork useful, feel free to support me on my ko-fi page
 
 ### License
 
