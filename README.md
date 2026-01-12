@@ -70,7 +70,7 @@ https://docs.krita.org/sl/untranslatable_pages/building_krita.html#building-on-l
 
 
 ---
-## Development Notes
+### Development Notes
 
 **Krita Revamp vs Krita 5.2.14 diffs:** <br>
 https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.2.14
