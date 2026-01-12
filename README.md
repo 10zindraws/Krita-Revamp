@@ -19,7 +19,7 @@ Additional features can't be officially added to Krita 5.2.14 or 5.3 (according 
 
 - Removed news section at welcome screen so you can see more of your recent images
 - For Photoshop users: Horizontal relative zoom (like scrubby zoom) is an option (previously only an option in 5.3 prealpha). <br>
-**Note: my plugin "Scrubby Zoom" is slower than this native implementation"** <br>
+**Note: my plugin [Scrubby Zoom](https://github.com/10zindraws/Scrubby-Zoom/tree/main) is slower than this native implementation"** <br>
 - For Photoshop users: "Activate Line Tool" only activates when freehand brush tool is the current tool <br>
 Demo: https://krita-artists.org/t/canvas-input-settings-configure-selection-settings-photoshop-compatible-inconsistencies/32351/9?u=tenzindraws
 - Groups are shorter and use a folder icon for thumbnails like Photoshop folders
