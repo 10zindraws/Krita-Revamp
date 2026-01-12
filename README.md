@@ -78,11 +78,10 @@ https://github.com/KDE/krita/compare/v5.2.14...10zindraws:Krita-Revamp:revamp-5.
 
 ### Donation
 
-Krita Revamp is a fork of Krita 5.2.14, it merely adds features and changes it's UI/UX experience. <br>
-Please donate to them for creating this amazing free open source painting program: <br>
+Please consider donating to the Krita Foundation:
 https://krita.org/en/donations/ <br>
 
-If you want to support my modified 
+If you specifically find my Krita fork useful, my ko-fi page is under releases.
 
 ### License
 
