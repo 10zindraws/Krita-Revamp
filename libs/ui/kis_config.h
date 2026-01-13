@@ -320,6 +320,10 @@ public:
     bool saveSessionOnQuit(bool defaultValue) const;
     void setSaveSessionOnQuit(bool value);
 
+    QString customSplashArtPath(bool defaultValue = false) const;
+    void setCustomSplashArtPath(const QString &path);
+    QString cachedCustomSplashArtPath() const;
+
     bool hideDevFundBanner(bool defaultValue = false) const;
     void setHideDevFundBanner(bool value = true);
 

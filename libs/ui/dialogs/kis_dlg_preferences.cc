@@ -414,6 +414,13 @@ GeneralTab::GeneralTab(QWidget *_parent, const char *_name)
 
     chkSaveSessionOnQuit->setChecked(cfg.saveSessionOnQuit(false));
 
+    // Custom splash art setup
+    m_urlCustomSplashArt->setMode(KoFileDialog::OpenFile);
+    m_urlCustomSplashArt->setConfigurationName("custom_splash_art");
+    m_urlCustomSplashArt->setMimeTypeFilters(QStringList() << "image/png" << "image/jpeg", "image/png");
+    m_urlCustomSplashArt->setFileName(cfg.customSplashArtPath());
+    connect(btnDefaultSplashArt, SIGNAL(clicked()), SLOT(clearCustomSplashArt()));
+
     m_chkConvertOnImport->setChecked(cfg.convertToImageColorspaceOnImport());
 
     m_undoStackSize->setValue(cfg.undoStackLimit());
@@ -776,6 +783,9 @@ void GeneralTab::setDefault()
 
     m_urlResourceFolder->setFileName(KoResourcePaths::getAppDataLocation());
 
+    // Reset custom splash art to default (empty = use built-in splash)
+    m_urlCustomSplashArt->setFileName(QString());
+
     chkForcedFontDPI->setChecked(false);
     intForcedFontDPI->setValue(qt_defaultDpi());
     intForcedFontDPI->setEnabled(false);
@@ -874,6 +884,16 @@ KisConfig::SessionOnStartup GeneralTab::sessionOnStartup() const
 bool GeneralTab::saveSessionOnQuit() const
 {
     return chkSaveSessionOnQuit->isChecked();
+}
+
+QString GeneralTab::customSplashArtPath() const
+{
+    return m_urlCustomSplashArt->fileName();
+}
+
+void GeneralTab::clearCustomSplashArt()
+{
+    m_urlCustomSplashArt->setFileName(QString());
 }
 
 bool GeneralTab::showRootLayer()
@@ -2437,6 +2457,7 @@ bool KisDlgPreferences::editPreferences()
         cfg.setForceAlwaysFullSizedEraserOutline(!m_general->m_changeEraserBrushOutline->isChecked());
         cfg.setSessionOnStartup(m_general->sessionOnStartup());
         cfg.setSaveSessionOnQuit(m_general->saveSessionOnQuit());
+        cfg.setCustomSplashArtPath(m_general->customSplashArtPath());
 
         KConfigGroup group = KSharedConfig::openConfig()->group("File Dialogs");
         group.writeEntry("DontUseNativeFileDialog", !m_general->m_chkNativeFileDialog->isChecked());

@@ -28,6 +28,9 @@
 #include <ksharedconfig.h>
 #include <kconfiggroup.h>
 #include <QIcon>
+#include <QFileInfo>
+
+#include "kis_config.h"
 
 #ifdef Q_OS_MACOS
 #include "libs/macosutils/KisMacosEntitlements.h"
@@ -107,36 +110,100 @@ void KisSplashScreen::updateSplashImage()
     const int marginTop = splashHeight * 0.05;
     const int marginRight = splashHeight * 0.1;
 
+    // Load default splash first to get reference dimensions
+    QPixmap defaultSplash(QStringLiteral(":/splash/0.png"));
+    if (defaultSplash.isNull() || defaultSplash.height() == 0) return;
+    
+    // Calculate default splash dimensions (these are our reference)
+    const int defaultHeight = splashHeight;
+    const int defaultWidth = defaultHeight * defaultSplash.width() / defaultSplash.height();
+
     QString splashName = QStringLiteral(":/splash/0.png");
     QString splashArtist = QStringLiteral("Tyson Tan");
+    bool usingCustomSplash = false;
+
+    // Check for custom splash art from user settings
+    KisConfig cfg(true);
+    QString customSplashPath = cfg.cachedCustomSplashArtPath();
+    if (!customSplashPath.isEmpty() && QFileInfo::exists(customSplashPath)) {
+        splashName = customSplashPath;
+        splashArtist = QString();  // No artist credit for custom splash
+        usingCustomSplash = true;
+    }
+
     // TODO: Re-add the holiday splash...
 #if 0
-    QDate currentDate = QDate::currentDate();
-    if (currentDate > QDate(currentDate.year(), 12, 4) ||
-            currentDate < QDate(currentDate.year(), 1, 9)) {
-        splashName = QStringLiteral(":/splash/1.png");
-        splashArtist = QStringLiteral("???");
+    if (!usingCustomSplash) {
+        QDate currentDate = QDate::currentDate();
+        if (currentDate > QDate(currentDate.year(), 12, 4) ||
+                currentDate < QDate(currentDate.year(), 1, 9)) {
+            splashName = QStringLiteral(":/splash/1.png");
+            splashArtist = QStringLiteral("???");
+        }
     }
 #endif
 
     QPixmap img(splashName);
 
-    if (img.isNull() || img.height() == 0) return;
+    if (img.isNull() || img.height() == 0) {
+        // Fallback to default splash if custom splash failed to load
+        if (usingCustomSplash) {
+            splashName = QStringLiteral(":/splash/0.png");
+            splashArtist = QStringLiteral("Tyson Tan");
+            img = QPixmap(splashName);
+            usingCustomSplash = false;
+        }
+        if (img.isNull() || img.height() == 0) return;
+    }
 
-    // Preserve aspect ratio of splash.
-    const int height = splashHeight;
-    const int width = height * img.width() / img.height();
+    int width, height;
+    
+    if (usingCustomSplash) {
+        // For custom splash: use default splash dimensions as reference
+        // Width is always the same as default splash width
+        width = defaultWidth;
+        height = defaultHeight;
+        
+        // Scale image to fit the target width while preserving aspect ratio
+        const qreal deviceRatio = devicePixelRatioF();
+        const int pixelWidth = width * deviceRatio;
+        const int pixelHeight = height * deviceRatio;
+        
+        // Calculate the scaled image dimensions to fill the width
+        const qreal scaleFactor = static_cast<qreal>(pixelWidth) / img.width();
+        const int scaledHeight = static_cast<int>(img.height() * scaleFactor);
+        
+        // Scale the image to match the target width
+        img = img.scaledToWidth(pixelWidth, Qt::SmoothTransformation);
+        
+        // If the scaled image is taller than needed, crop symmetrically from top and bottom
+        if (img.height() > pixelHeight) {
+            const int cropAmount = (img.height() - pixelHeight) / 2;
+            img = img.copy(0, cropAmount, img.width(), pixelHeight);
+        }
+        // If the scaled image is shorter than target height, adjust the display height
+        // (don't stretch the image - just show it at its natural height)
+        else if (img.height() < pixelHeight) {
+            height = img.height() / deviceRatio;
+        }
+        
+        img.setDevicePixelRatio(deviceRatio);
+    } else {
+        // Default splash: preserve aspect ratio
+        height = splashHeight;
+        width = height * img.width() / img.height();
+        
+        // Get a downscaled pixmap of the splash
+        const int pixelWidth = width * devicePixelRatioF();
+        const int pixelHeight = height * devicePixelRatioF();
+        img = img.scaled(pixelWidth, pixelHeight, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+        img.setDevicePixelRatio(devicePixelRatioF());
+    }
 
     setFixedWidth(width);
     setFixedHeight(height);
     lblSplash->setFixedWidth(width);
     lblSplash->setFixedHeight(height);
-
-    // Get a downscaled pixmap of the splash.
-    const int pixelWidth = width * devicePixelRatioF();
-    const int pixelHeight = height * devicePixelRatioF();
-    img = img.scaled(pixelWidth, pixelHeight, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-    img.setDevicePixelRatio(devicePixelRatioF());
     lblSplash->setPixmap(img);
 
     // Align banner to top-left with margin.

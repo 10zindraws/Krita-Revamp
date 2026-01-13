@@ -73,6 +73,8 @@ public:
     KisConfig::SessionOnStartup sessionOnStartup() const;
     bool saveSessionOnQuit() const;
 
+    QString customSplashArtPath() const;
+
     bool showRootLayer();
     int autoSaveInterval();
     void setDefault();
@@ -111,6 +113,7 @@ public:
 private Q_SLOTS:
     void getBackgroundImage();
     void clearBackgroundImage();
+    void clearCustomSplashArt();
     void checkResourcePath();
     void enableSubWindowOptions(int);
     void showAdvancedCumulativeUndoSettings();

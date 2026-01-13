@@ -9,6 +9,7 @@
 #include <QtGlobal>
 #include <QApplication>
 #include <QDesktopWidget>
+#include <QDir>
 #include <QMutex>
 #include <QFont>
 #include <QThread>
@@ -17,6 +18,7 @@
 #include <QStandardPaths>
 #include <QDebug>
 #include <QFileInfo>
+#include <QImage>
 #include <QScreen>
 
 #include <kconfig.h>
@@ -1284,6 +1286,47 @@ bool KisConfig::saveSessionOnQuit(bool defaultValue) const
 void KisConfig::setSaveSessionOnQuit(bool value)
 {
     m_cfg.writeEntry("saveSessionOnQuit", value);
+}
+
+QString KisConfig::customSplashArtPath(bool defaultValue) const
+{
+    return defaultValue ? QString() : m_cfg.readEntry("customSplashArtPath", QString());
+}
+
+void KisConfig::setCustomSplashArtPath(const QString &path)
+{
+    m_cfg.writeEntry("customSplashArtPath", path);
+    
+    // Cache the image to the app's cache directory for reliability
+    if (!path.isEmpty() && QFile::exists(path)) {
+        QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        QDir().mkpath(cacheDir);
+        QString cachedPath = cacheDir + "/custom_splash_cache.png";
+        
+        QImage img(path);
+        if (!img.isNull()) {
+            // Save as PNG to cache
+            img.save(cachedPath, "PNG");
+            m_cfg.writeEntry("customSplashArtCachePath", cachedPath);
+        }
+    } else {
+        // Clear the cache path if path is empty or doesn't exist
+        m_cfg.writeEntry("customSplashArtCachePath", QString());
+    }
+}
+
+QString KisConfig::cachedCustomSplashArtPath() const
+{
+    QString cachedPath = m_cfg.readEntry("customSplashArtCachePath", QString());
+    if (!cachedPath.isEmpty() && QFile::exists(cachedPath)) {
+        return cachedPath;
+    }
+    // Fallback to original path
+    QString originalPath = m_cfg.readEntry("customSplashArtPath", QString());
+    if (!originalPath.isEmpty() && QFile::exists(originalPath)) {
+        return originalPath;
+    }
+    return QString();
 }
 
 bool KisConfig::hideDevFundBanner(bool defaultValue) const
