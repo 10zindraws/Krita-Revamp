@@ -2288,6 +2288,90 @@
       <isCheckable>false</isCheckable>
       <statusTip/>
     </Action>
+    <Action name="interpolation_constant">
+      <icon>interpolation_constant</icon>
+      <text>Constant Interpolation</text>
+      <whatsThis></whatsThis>
+      <toolTip>Hold constant value. No interpolation.</toolTip>
+      <iconText>Constant</iconText>
+      <activationFlags>1000</activationFlags>
+      <activationConditions>1</activationConditions>
+      <shortcut/>
+      <isCheckable>false</isCheckable>
+      <statusTip/>
+    </Action>
+    <Action name="interpolation_linear">
+      <icon>interpolation_linear</icon>
+      <text>Linear Interpolation</text>
+      <whatsThis></whatsThis>
+      <toolTip>Linear interpolation.</toolTip>
+      <iconText>Linear</iconText>
+      <activationFlags>1000</activationFlags>
+      <activationConditions>1</activationConditions>
+      <shortcut/>
+      <isCheckable>false</isCheckable>
+      <statusTip/>
+    </Action>
+    <Action name="interpolation_bezier">
+      <icon>interpolation_bezier</icon>
+      <text>Bezier Interpolation</text>
+      <whatsThis></whatsThis>
+      <toolTip>Bezier curve interpolation.</toolTip>
+      <iconText>Bezier</iconText>
+      <activationFlags>1000</activationFlags>
+      <activationConditions>1</activationConditions>
+      <shortcut/>
+      <isCheckable>false</isCheckable>
+      <statusTip/>
+    </Action>
+    <Action name="tangents_sharp">
+      <icon>interpolation_sharp</icon>
+      <text>Sharp Tangents</text>
+      <whatsThis></whatsThis>
+      <toolTip>Sharp interpolation tangents.</toolTip>
+      <iconText>Sharp</iconText>
+      <activationFlags>1000</activationFlags>
+      <activationConditions>1</activationConditions>
+      <shortcut/>
+      <isCheckable>false</isCheckable>
+      <statusTip/>
+    </Action>
+    <Action name="tangents_smooth">
+      <icon>interpolation_smooth</icon>
+      <text>Smooth Tangents</text>
+      <whatsThis></whatsThis>
+      <toolTip>Smooth interpolation tangents.</toolTip>
+      <iconText>Smooth</iconText>
+      <activationFlags>1000</activationFlags>
+      <activationConditions>1</activationConditions>
+      <shortcut/>
+      <isCheckable>false</isCheckable>
+      <statusTip/>
+    </Action>
+    <Action name="zoom_to_fit_range">
+      <icon>zoom-fit</icon>
+      <text>Zoom to Fit Range</text>
+      <whatsThis></whatsThis>
+      <toolTip>Zoom view to fit channel range.</toolTip>
+      <iconText>Fit Range</iconText>
+      <activationFlags>1000</activationFlags>
+      <activationConditions>1</activationConditions>
+      <shortcut/>
+      <isCheckable>false</isCheckable>
+      <statusTip/>
+    </Action>
+    <Action name="zoom_to_fit_curve">
+      <icon>zoom-fit-curve</icon>
+      <text>Zoom to Fit Curve</text>
+      <whatsThis></whatsThis>
+      <toolTip>Zoom view to fit entire animation curve.</toolTip>
+      <iconText>Fit Curve</iconText>
+      <activationFlags>1000</activationFlags>
+      <activationConditions>1</activationConditions>
+      <shortcut/>
+      <isCheckable>false</isCheckable>
+      <statusTip/>
+    </Action>
     <Action name="mirror_frames">
       <icon/>
       <text>Mirror Frames</text>

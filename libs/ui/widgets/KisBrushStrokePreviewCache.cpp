@@ -18,6 +18,8 @@
 #include <KisResourceModel.h>
 #include <KisGlobalResourcesInterface.h>
 
+#include <KisPaintOpPresetSessionStorage.h>
+
 /**
  * @brief Runnable for background preview generation
  */
@@ -38,6 +40,12 @@ public:
         // which fails because QSqlDatabase connections are thread-specific.
         m_preset = preset->cloneWithResourcesSnapshot(
             KisGlobalResourcesInterface::instance(), nullptr, nullptr);
+
+        // Apply any session-level tweaks (opacity/flow sliders etc.) so the generated
+        // stroke preview matches what the user currently has in the brush settings.
+        // This is needed because the preset objects coming from the resource model
+        // represent on-disk state and do not include session tweaks.
+        KisPaintOpPresetSessionStorage::instance()->loadTweaks(m_preset);
     }
 
     void run() override
@@ -144,7 +152,7 @@ QImage KisBrushStrokePreviewCache::generatePlaceholder(const QSize &size) const
     placeholder.fill(QColor(0x53, 0x53, 0x53));  // #535353
 
     QPainter painter(&placeholder);
-    painter.setPen(QColor(0x80, 0x80, 0x80));  // Light gray text
+    painter.setPen(QColor(0xFF, 0xFF, 0xFF));  // Bright white brush name
     QFont font;
     font.setPixelSize(qMin(size.height() / 4, 10));
     painter.setFont(font);

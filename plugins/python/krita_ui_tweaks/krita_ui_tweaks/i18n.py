@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: CC0-1.0
 
 from krita import Krita
+from .options import _get_config_path
 
 # from .pyqt import QStandardPaths, QSettings, QByteArray
 import os
@@ -16,9 +17,7 @@ def i18n_reset():
 def i18n(val: str) -> str:
     global _translations
     if _translations is None:
-        path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "config.json"
-        )
+        path = _get_config_path()
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:

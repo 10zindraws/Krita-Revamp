@@ -15,6 +15,40 @@ _FORCED_TOGGLES: dict[str, bool] = {
     "shared_tool": True,
 }
 
+# Plugin name for config directory
+_PLUGIN_NAME = "krita_ui_tweaks"
+
+
+def _get_config_dir() -> str:
+    """Get user-writable config directory for this plugin."""
+    try:
+        from krita import Krita
+        app_data = Krita.instance().getAppDataLocation()
+        if app_data:
+            config_dir = os.path.join(app_data, "pykrita", _PLUGIN_NAME)
+            os.makedirs(config_dir, exist_ok=True)
+            return config_dir
+    except (ImportError, AttributeError, OSError):
+        pass
+    
+    # Fallback to APPDATA on Windows
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        config_dir = os.path.join(appdata, "krita", "pykrita", _PLUGIN_NAME)
+        try:
+            os.makedirs(config_dir, exist_ok=True)
+            return config_dir
+        except OSError:
+            pass
+    
+    # Last resort fallback to installation directory
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _get_config_path() -> str:
+    """Get full path to config.json in user-writable location."""
+    return os.path.join(_get_config_dir(), "config.json")
+
 
 def defaultConfig() -> C:
     config: C = {
@@ -60,9 +94,7 @@ def getOpt(*args: str):
 
 def readConfig():
     config = None
-    path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "config.json"
-    )
+    path = _get_config_path()
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -88,9 +120,7 @@ def readConfig():
 
 
 def writeConfig(config: C):
-    path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "config.json"
-    )
+    path = _get_config_path()
     try:
         with open(path, "w") as f:
             json.dump(config, f, indent=2)

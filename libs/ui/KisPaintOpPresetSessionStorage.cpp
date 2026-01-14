@@ -87,6 +87,8 @@ void KisPaintOpPresetSessionStorage::saveTweaks(KisPaintOpPresetSP preset)
     m_d->config->sync();
 
     dbgResources << "Saved tweaks for preset:" << preset->name() << "key:" << key;
+
+    Q_EMIT sigTweaksSaved(preset->name());
 }
 
 bool KisPaintOpPresetSessionStorage::loadTweaks(KisPaintOpPresetSP preset)
@@ -160,6 +162,7 @@ void KisPaintOpPresetSessionStorage::clearTweaks(KisPaintOpPresetSP preset)
         m_d->config->deleteGroup(key);
         m_d->config->sync();
         dbgResources << "Cleared tweaks for preset:" << preset->name() << "key:" << key;
+        Q_EMIT sigTweaksCleared(preset->name());
     }
 }
 

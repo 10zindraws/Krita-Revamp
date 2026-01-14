@@ -4,11 +4,10 @@ Currently a no-op stub. Can be enabled for debugging by setting
 _DEBUG_ENABLED = True.
 """
 
-import os
+from .paths import get_log_file_path
 
 _DEBUG_ENABLED = False
-_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
-_LOG_FILE = os.path.join(_LOG_DIR, "log.txt")
+_LOG_FILE = get_log_file_path("log.txt")
 
 
 def write_log(message: str) -> None:
@@ -17,7 +16,6 @@ def write_log(message: str) -> None:
         return
     
     try:
-        os.makedirs(_LOG_DIR, exist_ok=True)
         with open(_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(message + "\n")
     except OSError:

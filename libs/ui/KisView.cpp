@@ -1090,8 +1090,18 @@ KisView *KisView::replaceBy(KisDocument *document)
 {
     KisMainWindow *window = mainWindow();
     QMdiSubWindow *subWindow = d->subWindow;
-    delete this;
-    return window->newView(document, subWindow);
+
+    // Create the new view first before scheduling deletion
+    KisView *newView = window->newView(document, subWindow);
+
+    // Use deleteLater() instead of 'delete this' to prevent crashes
+    // when this method is called during event processing. The direct
+    // 'delete this' could cause Access Violations in Qt's event filter
+    // iteration (sendThroughObjectEventFilters) if events are still
+    // pending for this object or if event filters are being processed.
+    this->deleteLater();
+
+    return newView;
 }
 
 KisMainWindow * KisView::mainWindow() const

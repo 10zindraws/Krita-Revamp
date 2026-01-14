@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from krita import DockWidgetFactory, DockWidgetFactoryBase, Krita  # type: ignore
 from .utils.data_manager import load_shortcut_grids_data, save_shortcut_grids_data
+from .utils.paths import get_config_file_path
 from .widgets.shortcut_popup import ShortcutPopup
 from .widgets.shortcut_grid_widget import SingleShortcutGridWidget
 from .utils.config_utils import get_spacing_between_grids
@@ -33,10 +34,8 @@ class ShortcutAccessDockerWidget(QDockWidget):
 
     def setup_paths(self):
         """Setup configuration file paths"""
-        self.config_dir = os.path.join(os.path.dirname(__file__), "config")
-        if not os.path.exists(self.config_dir):
-            os.makedirs(self.config_dir)
-        self.data_file = os.path.join(self.config_dir, "shortcut_grid_data.json")
+        # Use user-writable location for config files
+        self.data_file = get_config_file_path("shortcut_grid_data.json")
 
     def init_ui(self):
         """Initialize the user interface"""

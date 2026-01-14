@@ -224,11 +224,8 @@ KisApplication::KisApplication(const QString &key, int &argc, char **argv)
         QStringList styles = QStringList() << "haiku" << "macintosh" << "breeze" << "fusion";
         if (!styles.contains(style()->objectName().toLower())) {
             Q_FOREACH (const QString & style, styles) {
-                if (!setStyle(style)) {
-                    qDebug() << "No" << style << "available.";
-                }
-                else {
-                    qDebug() << "Set style" << style;
+                if (setStyle(style)) {
+                    dbgResources << "Set widget style to" << style;
                     break;
                 }
             }
@@ -796,11 +793,16 @@ bool KisApplication::notify(QObject *receiver, QEvent *event)
         return result;
 
     } catch (std::exception &e) {
-        qWarning("Error %s sending event %i to object %s",
-                 e.what(), event->type(), qPrintable(receiver->objectName()));
+        // Avoid accessing receiver->objectName() as the receiver object may have
+        // been destroyed during event processing, which could cause another crash.
+        // The crash might have been caused by the receiver being deleted.
+        qWarning("Error %s sending event %i to object %p",
+                 e.what(), event->type(), static_cast<void*>(receiver));
     } catch (...) {
-        qWarning("Error <unknown> sending event %i to object %s",
-                 event->type(), qPrintable(receiver->objectName()));
+        // Avoid accessing receiver->objectName() as the receiver object may have
+        // been destroyed during event processing, which could cause another crash.
+        qWarning("Error <unknown> sending event %i to object %p",
+                 event->type(), static_cast<void*>(receiver));
     }
     return false;
 }

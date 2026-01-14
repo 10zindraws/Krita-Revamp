@@ -522,8 +522,8 @@ def buildFlatTheme():
     flat_dock_style = f""" 
         QDockWidget {{
             background: #{ps_bg_dark};
-            titlebar-close-icon: url(:/16_light_window-close.svg);
-            titlebar-normal-icon: url(:/16_light_window-restore.svg);
+            titlebar-close-icon: url(:/16_light_tab-close.svg);
+            titlebar-normal-icon: url(:/16_light_tab-close.svg);
             border: 4px solid #{ps_separator};
         }}
 

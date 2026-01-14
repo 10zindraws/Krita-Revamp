@@ -26,6 +26,7 @@ PERFORMANCE OPTIMIZATIONS:
 import os
 import json
 from krita import DockWidgetFactory, DockWidgetFactoryBase, Krita  # type: ignore
+from .utils.paths import get_config_file_path
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -153,11 +154,9 @@ class PresetGroupsDocker(
 
     def _init_config_paths(self):
         """Setup configuration file paths."""
-        config_dir = os.path.join(os.path.dirname(__file__), "config")
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir)
-        self.data_file = os.path.join(config_dir, "grids_data.json")
-        self.common_config_path = os.path.join(config_dir, "common.json")
+        # Use user-writable location for config files
+        self.data_file = get_config_file_path("grids_data.json")
+        self.common_config_path = get_config_file_path("common.json")
 
     def _load_data(self):
         """Load preset resources and grid data.

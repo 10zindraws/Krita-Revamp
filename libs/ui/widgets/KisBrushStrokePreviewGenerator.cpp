@@ -12,6 +12,7 @@
 
 #include <KoColorSpaceRegistry.h>
 #include <KoColor.h>
+#include <KoCompositeOpRegistry.h>
 
 #include <kis_image.h>
 #include <kis_paint_layer.h>
@@ -26,6 +27,8 @@
 #include <KisFakeRunnableStrokeJobsExecutor.h>
 #include <brushengine/kis_paintop.h>
 #include <brushengine/kis_paintop_registry.h>
+#include <brushengine/kis_random_source.h>
+#include <brushengine/KisPerStrokeRandomSource.h>
 #include <kis_transaction.h>
 #include <KisInterstrokeDataFactory.h>
 #include <KisInterstrokeDataTransactionWrapperFactory.h>
@@ -283,7 +286,7 @@ void KisBrushStrokePreviewGenerator::paintStroke(
     // Setup painter
     KisPainter painter(layer->paintDevice());
     painter.setPaintColor(paintColor);
-    // Use full opacity for preview regardless of preset setting
+    // Use full painter opacity for previews; per-stroke strength is encoded in the preset.
     painter.setOpacityF(1.0);
     painter.setPaintOpPreset(proxyPreset, layer, image);
 
@@ -291,17 +294,26 @@ void KisBrushStrokePreviewGenerator::paintStroke(
     const qreal centerX = size.width() * 0.5;
     const qreal centerY = size.height() * 0.5;
 
+    // Create random sources for paint information objects to avoid
+    // "Accessing uninitialized random source!" warnings during preview generation
+    KisRandomSourceSP randomSource = new KisRandomSource();
+    KisPerStrokeRandomSourceSP perStrokeRandomSource = new KisPerStrokeRandomSource();
+
     // S-curve start point (left side, low pressure)
     KisPaintInformation startPoint;
     startPoint.setPos(QPointF(centerX - (size.width() * 0.45),
                               centerY + (size.height() * 0.2)));
     startPoint.setPressure(0.0);
+    startPoint.setRandomSource(randomSource);
+    startPoint.setPerStrokeRandomSource(perStrokeRandomSource);
 
     // S-curve end point (right side, high pressure)
     KisPaintInformation endPoint;
     endPoint.setPos(QPointF(centerX + (size.width() * 0.4),
                             centerY - (size.height() * 0.2)));
     endPoint.setPressure(1.0);
+    endPoint.setRandomSource(randomSource);
+    endPoint.setPerStrokeRandomSource(perStrokeRandomSource);
 
     // Set time for MyPaint brushes
     if (paintOpId == "mypaintbrush") {
@@ -406,7 +418,7 @@ void KisBrushStrokePreviewGenerator::paintWavyStroke(
     // Setup painter
     KisPainter painter(layer->paintDevice());
     painter.setPaintColor(paintColor);
-    // Use full opacity for preview regardless of preset setting
+    // Use full painter opacity for previews; per-stroke strength is encoded in the preset.
     painter.setOpacityF(1.0);
     painter.setPaintOpPreset(proxyPreset, layer, image);
 
@@ -417,13 +429,22 @@ void KisBrushStrokePreviewGenerator::paintWavyStroke(
     const qreal endX = centerX + (size.width() * 0.4);
     const int repeats = 8;
 
+    // Create random sources for paint information objects to avoid
+    // "Accessing uninitialized random source!" warnings during preview generation
+    KisRandomSourceSP randomSource = new KisRandomSource();
+    KisPerStrokeRandomSourceSP perStrokeRandomSource = new KisPerStrokeRandomSource();
+
     KisPaintInformation pointOne;
     pointOne.setPressure(0.0);
     pointOne.setPos(QPointF(startX, centerY));
+    pointOne.setRandomSource(randomSource);
+    pointOne.setPerStrokeRandomSource(perStrokeRandomSource);
 
     KisPaintInformation pointTwo;
     pointTwo.setPressure(0.0);
     pointTwo.setPos(QPointF(startX, centerY));
+    pointTwo.setRandomSource(randomSource);
+    pointTwo.setPerStrokeRandomSource(perStrokeRandomSource);
 
     KisDistanceInformation currentDistance;
 
@@ -506,28 +527,65 @@ QImage KisBrushStrokePreviewGenerator::generateStrokePreview(
     const KoColorSpace *colorSpace = KoColorSpaceRegistry::instance()->rgb8();
     KisImageSP image = new KisImage(nullptr, size.width(), size.height(),
                                     colorSpace, "stroke_preview_image");
-    KisPaintLayerSP layer = new KisPaintLayer(image, "stroke_layer",
-                                              OPACITY_OPAQUE_U8, colorSpace);
+    KisPaintLayerSP backgroundLayer = new KisPaintLayer(image, "stroke_bg_layer",
+                                                        OPACITY_OPAQUE_U8, colorSpace);
+    KisPaintLayerSP strokeLayer = new KisPaintLayer(image, "stroke_layer",
+                                                    OPACITY_OPAQUE_U8, colorSpace);
 
     // Paint background
     const bool striped = needsStripedBackground(preset);
-    paintBackground(layer->paintDevice(), size, backgroundColor, striped);
+    paintBackground(backgroundLayer->paintDevice(), size, backgroundColor, striped);
+
+    // Ensure stroke layer starts transparent
+    strokeLayer->paintDevice()->clear();
 
     // Determine stroke color (white for striped backgrounds)
     QColor strokeColor = striped ? Qt::white : foregroundColor;
+
+    // Opacity should behave as stroke transparency (like in KisPresetLivePreviewView):
+    // paint the stroke at full opacity and apply opacity as a final blend step.
+    const qreal strokeOpacity = qBound<qreal>(0.0, preset->settings()->paintOpOpacity(), 1.0);
+
+    // Flow should behave as the classic "stroke strength" (old opacity-like behavior).
+    // Historically, the thumbnail strength was driven by the preset's OpacityValue during stroke rendering.
+    // To keep Opacity as true transparency, we map FlowValue -> OpacityValue for the render preset,
+    // while preserving FlowValue itself (do not force it).
+    const qreal flowStrength = qBound<qreal>(0.0, preset->settings()->paintOpFlow(), 1.0);
+
+    KisPaintOpPresetSP opaquePreset = preset->clone().dynamicCast<KisPaintOpPreset>();
+    if (!opaquePreset || !opaquePreset->settings()) {
+        return QImage();
+    }
+    opaquePreset->settings()->setPaintOpOpacity(flowStrength);
 
     // Paint the stroke
     const QString paintOpId = preset->paintOp().id();
     if (paintOpId == "sketchbrush" ||
         paintOpId == "curvebrush" ||
         paintOpId == "particlebrush") {
-        paintWavyStroke(image, layer, preset, size, strokeColor);
+        paintWavyStroke(image, strokeLayer, opaquePreset, size, strokeColor);
     } else {
-        paintStroke(image, layer, preset, size, strokeColor);
+        paintStroke(image, strokeLayer, opaquePreset, size, strokeColor);
     }
 
-    // Convert paint device to QImage
-    QImage result = layer->paintDevice()->convertToQImage(nullptr, image->bounds());
+    // Convert paint devices to QImage and blend stroke with requested opacity.
+    QImage result = backgroundLayer->paintDevice()->convertToQImage(nullptr, image->bounds())
+                        .convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QImage strokeImg = strokeLayer->paintDevice()->convertToQImage(nullptr, image->bounds())
+                           .convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    if (!strokeImg.isNull() && strokeOpacity < 1.0) {
+        QPainter p(&result);
+        p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        p.setOpacity(strokeOpacity);
+        p.drawImage(0, 0, strokeImg);
+        p.end();
+    } else if (!strokeImg.isNull()) {
+        QPainter p(&result);
+        p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        p.drawImage(0, 0, strokeImg);
+        p.end();
+    }
 
     return result;
 }

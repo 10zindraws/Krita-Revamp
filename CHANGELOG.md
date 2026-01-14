@@ -1,7 +1,21 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-###### Note: this version of Krita is a modified 5.2.14
+###### Note: this project is a fork of Krita 5.2.14
+
+## [1.1.0] - 2026-01-14
+
+### Added
+- Ability to change Krita's startup slash art to a custom image
+- Added "Stroke" display in Brush Preset docker for Photoshop-like brush previews
+
+### Fixed
+- Crash: Unsafe object deletion during event processing
+- Log spam: Missing initialization, overly verbose warnings, missing action definitions
+- Plugin compatibility: Action registry now gracefully handles dynamically-created plugin actions without XML data
+- Plugin permissions: Plugin configs now points to proper appdata directory to survive krita reinstalls and avoid write permission conflicts
+- Unnecessary Stroke Updates: Fixed issue where the brush stroke preview flashes (regenerates) when the user is just painting strokes.
+- Opacity and Flow: Fixed confusion of changing Opacity showing changed Flow in the Brush Stroke Preview thumbnail
 
 
 ## [1.0.0] - 2026-01-11

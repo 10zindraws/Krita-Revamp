@@ -1257,6 +1257,9 @@ void KisPaintopBox::sliderChanged(int n)
         propertiesProxy->setProperty("FlowValue", flow);
         propertiesProxy->setProperty("Texture/Pattern/Scale", patternsize);
         m_presetsEditor->readOptionSetting(m_resourceProvider->currentPreset()->settings());
+
+        // Save tweaks to session storage so they persist and trigger stroke preview updates
+        KisPaintOpPresetSessionStorage::instance()->saveTweaks(m_resourceProvider->currentPreset());
     } else {
         m_resourceProvider->setOpacity(opacity);
     }

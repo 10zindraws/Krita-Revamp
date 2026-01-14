@@ -86,7 +86,7 @@ public Q_SLOTS:
 private Q_SLOTS:
     void notifyConfigChanged();
     void slotResourceWasSelected(KoResourceSP resource);
-    void slotCurrentPresetChanged();
+    void slotCurrentPresetChanged(const QString &presetName);
     void slotStrokePreviewReady(const QString &presetName);
 
 private:

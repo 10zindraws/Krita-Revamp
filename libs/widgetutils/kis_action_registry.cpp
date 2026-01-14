@@ -155,11 +155,9 @@ public:
     void loadActionFiles();
     void loadCustomShortcuts(QString filename = QStringLiteral("kritashortcutsrc"));
 
-    // XXX: this adds a default item for the given name to the list of actionInfo objects!
+    // This adds a default (empty) item for the given name if it doesn't exist.
+    // This is intentional - plugins create actions dynamically without XML definitions.
     ActionInfoItem &actionInfo(const QString &name) {
-        if (!actionInfoList.contains(name)) {
-            dbgAction << "Tried to look up info for unknown action" << name;
-        }
         return actionInfoList[name];
     }
 
@@ -239,12 +237,7 @@ void KisActionRegistry::loadShortcutScheme(const QString &schemeName)
 QAction * KisActionRegistry::makeQAction(const QString &name, QObject *parent)
 {
     QAction * a = new QAction(parent);
-    if (!d->actionInfoList.contains(name)) {
-        qWarning() << "Warning: requested data for unknown action" << name;
-        a->setObjectName(name);
-        return a;
-    }
-
+    a->setObjectName(name);
     propertizeAction(name, a);
     return a;
 }
@@ -312,11 +305,7 @@ QList<QString> KisActionRegistry::registeredShortcutIds() const
 
 bool KisActionRegistry::propertizeAction(const QString &name, QAction * a)
 {
-    if (!d->actionInfoList.contains(name)) {
-        warnAction << "propertizeAction: No XML data found for action" << name;
-        return false;
-    }
-
+    // Get or create action info - plugins may create actions without XML definitions
     const ActionInfoItem info = d->actionInfo(name);
 
     QDomElement actionXml = info.xmlData;
@@ -358,13 +347,12 @@ QString KisActionRegistry::getActionProperty(const QString &name, const QString 
 {
     ActionInfoItem info = d->actionInfo(name);
     QDomElement actionXml = info.xmlData;
-    if (actionXml.text().isEmpty()) {
-        dbgAction << "getActionProperty: No XML data found for action" << name;
+    if (actionXml.isNull()) {
+        // No XML data - this is normal for dynamically created plugin actions
         return QString();
     }
 
     return getChildContent(actionXml, property);
-
 }
 
 
@@ -378,10 +366,25 @@ void KisActionRegistry::Private::loadActionFiles()
     Q_FOREACH (const QString &actionDefinition, actionDefinitions)  {
         QDomDocument doc;
         QFile f(actionDefinition);
-        f.open(QFile::ReadOnly);
-        doc.setContent(f.readAll());
+        if (!f.open(QFile::ReadOnly)) {
+            qWarning() << "Could not open action file" << actionDefinition;
+            continue;
+        }
+        
+        QString errorMsg;
+        int errorLine, errorColumn;
+        if (!doc.setContent(f.readAll(), &errorMsg, &errorLine, &errorColumn)) {
+            qWarning() << "Action file" << actionDefinition << "is not valid XML:" 
+                       << errorMsg << "at line" << errorLine;
+            continue;
+        }
 
         QDomElement base       = doc.documentElement(); // "ActionCollection" outer group
+        if (base.isNull()) {
+            qWarning() << "Action file" << actionDefinition << "is empty or has no root element; skipping.";
+            continue;
+        }
+        
         QString collectionName = base.attribute("name");
         QString version        = base.attribute("version");
         if (version != "2") {
@@ -417,7 +420,10 @@ void KisActionRegistry::Private::loadActionFiles()
                     }
 
                     else if (actionInfoList.contains(name)) {
-                        qWarning() << "NOT COOL: Duplicated action name from xml data: " << name;
+                        // Duplicates can occur when plugins define actions in .action files
+                        // that are also present in other .action files. This is expected
+                        // behavior - the first definition wins, duplicates are skipped.
+                        dbgAction << "Skipping duplicated action name from xml data:" << name;
                     }
 
                     else {

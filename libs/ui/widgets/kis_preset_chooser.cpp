@@ -38,6 +38,7 @@
 #include <KisResourceThumbnailCache.h>
 #include "KisBrushStrokePreviewCache.h"
 #include "KisBrushStrokePreviewGenerator.h"
+#include "KisPaintOpPresetSessionStorage.h"
 
 
 /// The resource item delegate for rendering the resource preview
@@ -320,6 +321,14 @@ KisPresetChooser::KisPresetChooser(QWidget *parent)
     connect(KisBrushStrokePreviewCache::instance(), &KisBrushStrokePreviewCache::previewReady,
             this, &KisPresetChooser::slotStrokePreviewReady);
 
+    // Connect to session storage signals to invalidate stroke preview when settings change
+    // This is the proper hook - it only fires when user actually modifies settings in the UI,
+    // not during painting or other internal state changes
+    connect(KisPaintOpPresetSessionStorage::instance(), &KisPaintOpPresetSessionStorage::sigTweaksSaved,
+            this, &KisPresetChooser::slotCurrentPresetChanged);
+    connect(KisPaintOpPresetSessionStorage::instance(), &KisPaintOpPresetSessionStorage::sigTweaksCleared,
+            this, &KisPresetChooser::slotCurrentPresetChanged);
+
     m_mode = ViewMode::THUMBNAIL;
 
     connect(KisConfigNotifier::instance(), SIGNAL(configChanged()),
@@ -368,23 +377,36 @@ void KisPresetChooser::slotResourceWasSelected(KoResourceSP resource)
     KisPaintOpPresetSP preset = resource.dynamicCast<KisPaintOpPreset>();
     KIS_SAFE_ASSERT_RECOVER_RETURN(preset);
 
-    m_currentPresetConnections.addUniqueConnection(
-        preset->updateProxy(), SIGNAL(sigSettingsChanged()),
-        this, SLOT(slotCurrentPresetChanged()));
+    // Note: We intentionally do NOT connect to sigSettingsChanged here.
+    // The stroke preview cache should only be invalidated when the preset
+    // is explicitly changed/reloaded, not on every settings modification.
+    // Live-updating previews during settings tweaks is expensive and causes
+    // the preview to flash constantly. The cache handles misses gracefully.
 }
 
-void KisPresetChooser::slotCurrentPresetChanged()
+void KisPresetChooser::slotCurrentPresetChanged(const QString &presetName)
 {
+    // This slot is connected to KisPaintOpPresetSessionStorage signals
+    // which fire only when the user actually modifies brush settings in the UI.
+    // This is the proper hook for stroke preview invalidation - it won't fire
+    // during painting or other internal state changes.
+    
+    if (presetName.isEmpty()) return;
+    
+    // Only invalidate if we're in stroke view mode
+    if (m_mode != ViewMode::STROKE) return;
+
+    // Invalidate the stroke preview cache for this preset
+    KisBrushStrokePreviewCache::instance()->invalidatePreset(presetName);
+
+    // Find the model index for this preset and notify about change
     KoResourceSP currentResource = m_chooser->currentResource();
-    if (!currentResource) return;
-
-    // Invalidate stroke preview cache for this preset
-    KisBrushStrokePreviewCache::instance()->invalidatePreset(currentResource->name());
-
-    QModelIndex index = m_chooser->tagFilterModel()->indexForResource(currentResource);
-    Q_EMIT m_chooser->tagFilterModel()->dataChanged(index,
-                                               index,
-                                               {Qt::UserRole + KisAbstractResourceModel::Thumbnail});
+    if (currentResource && currentResource->name() == presetName) {
+        QModelIndex index = m_chooser->tagFilterModel()->indexForResource(currentResource);
+        Q_EMIT m_chooser->tagFilterModel()->dataChanged(index,
+                                                   index,
+                                                   {Qt::UserRole + KisAbstractResourceModel::Thumbnail});
+    }
 }
 
 void KisPresetChooser::updateViewSettings()

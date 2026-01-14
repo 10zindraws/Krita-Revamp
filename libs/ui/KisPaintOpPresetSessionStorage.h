@@ -73,6 +73,24 @@ public:
      */
     void sync();
 
+Q_SIGNALS:
+    /**
+     * Emitted when preset tweaks are saved.
+     * This signal is used by components that need to update when brush
+     * settings are modified (like stroke preview cache invalidation).
+     *
+     * @param presetName The name of the preset whose tweaks were saved
+     */
+    void sigTweaksSaved(const QString &presetName);
+
+    /**
+     * Emitted when preset tweaks are cleared (preset reloaded to defaults).
+     *
+     * @param presetName The name of the preset whose tweaks were cleared
+     */
+    void sigTweaksCleared(const QString &presetName);
+
+public:
     KisPaintOpPresetSessionStorage();
     ~KisPaintOpPresetSessionStorage() override;
 

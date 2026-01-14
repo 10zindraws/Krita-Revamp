@@ -74,10 +74,20 @@ bool KoResourceBundle::load()
             }
             resourceStore->close();
 
+            QStringList missingFiles;
             Q_FOREACH (KoResourceBundleManifest::ResourceReference ref, m_manifest.files()) {
                 if (!resourceStore->hasFile(ref.resourcePath)) {
                     m_manifest.removeResource(ref);
-                    qWarning() << "Bundle" << filename() <<  "is broken. File" << ref.resourcePath << "is missing";
+                    missingFiles << ref.resourcePath;
+                }
+            }
+            
+            if (!missingFiles.isEmpty()) {
+                if (missingFiles.size() <= 3) {
+                    qWarning() << "Bundle" << filename() << "is broken. Missing files:" << missingFiles.join(", ");
+                } else {
+                    qWarning() << "Bundle" << filename() << "is broken. Missing" << missingFiles.size() 
+                               << "files, including:" << missingFiles.mid(0, 3).join(", ") << "...";
                 }
             }
 

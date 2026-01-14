@@ -7,10 +7,10 @@ import os
 import json
 from typing import Any
 
-# Path constants
-_UTILS_DIR = os.path.dirname(__file__)
-_CONFIG_DIR = os.path.join(_UTILS_DIR, "..", "config")
-_CONFIG_PATH = os.path.join(_CONFIG_DIR, "common.json")
+from .paths import get_config_dir, get_config_file_path
+
+# Path constants - using user-writable location
+_CONFIG_PATH = get_config_file_path("common.json")
 
 # Default configuration
 DEFAULT_CONFIG = {
