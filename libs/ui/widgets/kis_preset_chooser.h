@@ -39,14 +39,16 @@ public:
     ~KisPresetChooser() override;
 
     enum ViewMode {
-        THUMBNAIL, /// Shows thumbnails
-        DETAIL  /// Shows thumbnails with text next to it
+        THUMBNAIL,  /// Shows thumbnails
+        DETAIL,     /// Shows thumbnails with text next to it
+        STROKE      /// Shows stroke previews with brush name
     };
 
     /// Sets a list of resources in the paintop list, when ever user press enter in the lineedit of paintop_presets_popup Class
     void setViewMode(ViewMode mode);
     void setViewModeToThumbnail();
     void setViewModeToDetail();
+    void setViewModeToStroke();
 
     void setCurrentResource(KoResourceSP resource);
 
@@ -85,6 +87,7 @@ private Q_SLOTS:
     void notifyConfigChanged();
     void slotResourceWasSelected(KoResourceSP resource);
     void slotCurrentPresetChanged();
+    void slotStrokePreviewReady(const QString &presetName);
 
 private:
     KisResourceItemChooser *m_chooser {0};

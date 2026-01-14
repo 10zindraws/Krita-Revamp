@@ -35,6 +35,7 @@ Q_SIGNALS:
 private Q_SLOTS:
     void slotThumbnailMode();
     void slotDetailMode();
+    void slotStrokeMode();
     void slotUpdateMenu();
     void paintEvent(QPaintEvent *) override;
    
