@@ -17,6 +17,8 @@ Additional features can't be officially added to Krita 5.2.14 or 5.3 (according 
 
 ### Features/Changes
 
+- Brush stroke previews like Photoshop <br>
+<img width="242" height="560" alt="image" src="https://github.com/user-attachments/assets/05f29cd4-2620-42e3-b0c1-c6c132fbec87" />
 - Removed news section at welcome screen so you can see more of your recent images
 - For Photoshop users: Horizontal relative zoom (like scrubby zoom) is an option (previously only an option in 5.3 prealpha). <br>
 **Note: my plugin [Scrubby Zoom](https://github.com/10zindraws/Scrubby-Zoom/tree/main) is slower than this native implementation"** <br>
