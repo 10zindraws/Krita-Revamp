@@ -36,19 +36,20 @@ Additional features can't be officially added to Krita 5.2.14 or 5.3 (according 
 - Added extra spacers toolbar actions
 - Krita revamp persistently remembers what settings you've changed on your brush preset and ONLY resets when you explicity click the "Reload the brush preset" button. The default version of Krita would reset your brush settings unless you clicked "Overwrite Brush Preset" every single time before closing Krita.
 
-#### Built-in plugins
-- dockerundercursor
-- krita_ui_tweaks (modified version)
-- quick_brush_size
-- [separatebrusheraser](https://krita-artists.org/t/separate-brush-eraser-plugin/125172)
-- [layer_kit](https://krita-artists.org/t/layer-kit-organize-your-layers-faster/157281/18)
-- quickexportdocker <br>
-<img width="294" height="449" alt="image" src="https://github.com/user-attachments/assets/5dcb81bb-f9eb-4306-8d8e-ed35018993b5" /> <br>
-- preset_groups
-- super_docker-lock
-- timer_watch
-- krita_work_timer
+#### Built-in plugins - Links lead to more info
+
 - krita-redesign (modified version)
+- krita_ui_tweaks (modified version)
+- dockerundercursor
+- [quick_brush_size](https://krita-artists.org/t/quick-brush-size/156643)
+- [separatebrusheraser](https://krita-artists.org/t/separate-brush-eraser-plugin/125172) - You can use separate brushes for eraser and brush
+- [layer_kit](https://krita-artists.org/t/layer-kit-organize-your-layers-faster/157281) - Adds Clipping Mask feature to Krita
+- quickexportdocker - A fast file exporter that can export multiple file types and sizes <br>
+<img width="294" height="449" alt="image" src="https://github.com/user-attachments/assets/5dcb81bb-f9eb-4306-8d8e-ed35018993b5" /> <br>
+- [preset_groups](https://krita-artists.org/t/preset-groups-drag-and-drop-brush-management/154670) - For drag and drop brush management
+- [super_docker-lock](https://krita-artists.org/t/super-docker-lock-keep-all-your-dockers-in-place/159261)
+- [timer_watch](https://github.com/10zindraws/timer_watch_short) - A simple stopwatch, useful for gesture drawing
+- [krita_work_timer](https://krita-artists.org/t/smart-time-tracker-plugin/155636) - Smart tracker to detect how much time you spend painting
 - label-box
 <br>
 
