@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 ## [1.1.0] - 2026-01-14
 
 ### Added
-- Ability to change Krita's startup slash art to a custom image
+- Ability to change Krita's startup splash art to a custom image
 - Added "Stroke" display in Brush Preset docker for Photoshop-like brush previews
 
 ### Fixed
