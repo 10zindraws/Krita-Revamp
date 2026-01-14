@@ -35,7 +35,6 @@ Additional features can't be officially added to Krita 5.2.14 or 5.3 (according 
 - Added smoothing slider - optional toolbar slider
 - Added extra spacers toolbar actions
 - Krita revamp persistently remembers what settings you've changed on your brush preset and ONLY resets when you explicity click the "Reload the brush preset" button. The default version of Krita would reset your brush settings unless you clicked "Overwrite Brush Preset" every single time before closing Krita.
-- Removed "Temporarily Save Tweaks To Presets" because it's not needed due to Revamp's change.
 
 #### Built-in plugins
 - dockerundercursor
