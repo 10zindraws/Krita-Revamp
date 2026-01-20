@@ -28,6 +28,7 @@ set(kritaresources_LIB_SRCS
     KisTagModel.cpp
 
     KisTagResourceModel.cpp
+    KisPresetOrderManager.cpp
 
     KoResource.cpp
     KoResourceBundle.cpp

@@ -117,7 +117,6 @@ void KisResourceTaggingManager::contextMenuRequested(KoResourceSP resource, QPoi
 
     KisResourceItemChooserContextMenu menu(resource, d->tagChooser->currentlySelectedTag(), d->tagChooser);
     menu.exec(pos);
-
 }
 
 KisTagChooserWidget *KisResourceTaggingManager::tagChooserWidget()

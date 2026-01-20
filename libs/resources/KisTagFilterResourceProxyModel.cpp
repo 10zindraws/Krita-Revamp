@@ -6,11 +6,14 @@
 #include "KisTagFilterResourceProxyModel.h"
 
 #include <QDebug>
+#include <algorithm>
 
 #include <KisResourceModelProvider.h>
 #include <KisResourceModel.h>
 #include <KisTagResourceModel.h>
 #include <KisTagModel.h>
+#include <KisPresetOrderManager.h>
+#include <KisResourceTypes.h>
 
 #include <kis_debug.h>
 #include <KisResourceSearchBoxFilter.h>
@@ -48,6 +51,12 @@ KisTagFilterResourceProxyModel::KisTagFilterResourceProxyModel(const QString &re
     d->tagResourceModel = new KisTagResourceModel(resourceType);
 
     setSourceModel(d->resourceModel);
+
+    // Connect to order manager for preset ordering (only for PaintOpPresets)
+    if (resourceType == ResourceType::PaintOpPresets) {
+        connect(KisPresetOrderManager::instance(), &KisPresetOrderManager::orderChanged,
+                this, &KisTagFilterResourceProxyModel::slotOrderChanged);
+    }
 }
 
 KisTagFilterResourceProxyModel::~KisTagFilterResourceProxyModel()
@@ -373,8 +382,107 @@ bool KisTagFilterResourceProxyModel::filterAcceptsRow(int source_row, const QMod
 
 bool KisTagFilterResourceProxyModel::lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const
 {
+    // Only use custom ordering for PaintOpPresets
+    if (d->resourceType == ResourceType::PaintOpPresets) {
+        QString tagUrl = getCurrentTagUrl();
+        KisPresetOrderManager *orderManager = KisPresetOrderManager::instance();
+
+        if (orderManager->hasCustomOrder(tagUrl)) {
+            int idLeft = sourceModel()->data(source_left, Qt::UserRole + KisAbstractResourceModel::Id).toInt();
+            int idRight = sourceModel()->data(source_right, Qt::UserRole + KisAbstractResourceModel::Id).toInt();
+
+            int posLeft = orderManager->getPosition(tagUrl, idLeft);
+            int posRight = orderManager->getPosition(tagUrl, idRight);
+
+            // If both have positions, compare them
+            if (posLeft >= 0 && posRight >= 0) {
+                return posLeft < posRight;
+            }
+
+            // NEW RESOURCES GO TO THE TOP:
+            // If neither has a position (new resources), sort alphabetically among themselves at TOP
+            if (posLeft < 0 && posRight < 0) {
+                QString nameLeft = sourceModel()->data(source_left, Qt::UserRole + KisAbstractResourceModel::Name).toString();
+                QString nameRight = sourceModel()->data(source_right, Qt::UserRole + KisAbstractResourceModel::Name).toString();
+                return nameLeft.toLower() < nameRight.toLower();
+            }
+
+            // If only left has no position (new), it goes BEFORE right (which has a position)
+            if (posLeft < 0 && posRight >= 0) return true;
+            // If only right has no position (new), it goes BEFORE left (which has a position)
+            if (posLeft >= 0 && posRight < 0) return false;
+        }
+    }
+
+    // Fall back to alphabetic sorting
     QString nameLeft = sourceModel()->data(source_left, Qt::UserRole + KisAbstractResourceModel::Name).toString();
     QString nameRight = sourceModel()->data(source_right, Qt::UserRole + KisAbstractResourceModel::Name).toString();
     return nameLeft.toLower() < nameRight.toLower();
+}
+
+QString KisTagFilterResourceProxyModel::getCurrentTagUrl() const
+{
+    if (d->currentTagFilter && d->currentTagFilter->valid()) {
+        return d->currentTagFilter->url();
+    }
+    return QString(); // Empty string represents "All" tag
+}
+
+void KisTagFilterResourceProxyModel::moveResource(int resourceId, int newPosition)
+{
+    if (d->resourceType != ResourceType::PaintOpPresets) return;
+
+    QString tagUrl = getCurrentTagUrl();
+    initializeOrderForCurrentTag();
+    KisPresetOrderManager::instance()->moveResource(tagUrl, resourceId, newPosition);
+}
+
+void KisTagFilterResourceProxyModel::moveResources(const QList<int> &resourceIds, int targetPosition)
+{
+    if (d->resourceType != ResourceType::PaintOpPresets) return;
+    if (resourceIds.isEmpty()) return;
+
+    QString tagUrl = getCurrentTagUrl();
+    initializeOrderForCurrentTag();
+    KisPresetOrderManager::instance()->moveResources(tagUrl, resourceIds, targetPosition);
+}
+
+void KisTagFilterResourceProxyModel::initializeOrderForCurrentTag()
+{
+    if (d->resourceType != ResourceType::PaintOpPresets) return;
+
+    QString tagUrl = getCurrentTagUrl();
+    KisPresetOrderManager *orderManager = KisPresetOrderManager::instance();
+
+    // If custom order doesn't exist yet, initialize from current model order
+    if (!orderManager->hasCustomOrder(tagUrl)) {
+        QList<int> currentOrder;
+        for (int i = 0; i < rowCount(); ++i) {
+            QModelIndex idx = index(i, 0);
+            int resourceId = idx.data(Qt::UserRole + KisAbstractResourceModel::Id).toInt();
+            if (resourceId > 0) {
+                currentOrder.append(resourceId);
+            }
+        }
+        if (!currentOrder.isEmpty()) {
+            orderManager->setOrderForTag(tagUrl, currentOrder);
+        }
+    }
+}
+
+bool KisTagFilterResourceProxyModel::isUsingCustomOrder() const
+{
+    if (d->resourceType != ResourceType::PaintOpPresets) return false;
+    return KisPresetOrderManager::instance()->hasCustomOrder(getCurrentTagUrl());
+}
+
+void KisTagFilterResourceProxyModel::slotOrderChanged(const QString &tagUrl)
+{
+    // Only invalidate if the changed tag matches our current filter
+    QString currentUrl = getCurrentTagUrl();
+    if (tagUrl == currentUrl) {
+        invalidate();
+        Q_EMIT orderChanged();
+    }
 }
 

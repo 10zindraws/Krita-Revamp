@@ -9,6 +9,7 @@
 
 #include <QSortFilterProxyModel>
 #include <QObject>
+#include <QList>
 
 #include "KoResource.h"
 #include "KisResourceModel.h"
@@ -85,10 +86,46 @@ public:
     bool untagResources(const KisTagSP tag, const QVector<int> &resourceIds);
     int isResourceTagged(const KisTagSP tag, const int resourceId);
 
+    /**
+     * @brief getCurrentTagUrl Get the URL of the current tag filter
+     * @return Tag URL, empty string for "All" tag
+     */
+    QString getCurrentTagUrl() const;
+
+    /**
+     * @brief moveResource Move a resource to a new position in the current tag's order
+     * @param resourceId Resource to move
+     * @param newPosition Target position (proxy model row index)
+     */
+    void moveResource(int resourceId, int newPosition);
+
+    /**
+     * @brief moveResources Move multiple resources to a new position
+     * @param resourceIds Resources to move (in order)
+     * @param targetPosition Target position for first resource
+     */
+    void moveResources(const QList<int> &resourceIds, int targetPosition);
+
+    /**
+     * @brief initializeOrderForCurrentTag Initialize the custom order for the current tag
+     *        based on the current model contents. Call this before first drag operation.
+     */
+    void initializeOrderForCurrentTag();
+
+    /**
+     * @brief isUsingCustomOrder Check if custom ordering is enabled for current tag
+     * @return true if custom order exists
+     */
+    bool isUsingCustomOrder() const;
+
 Q_SIGNALS:
 
     void beforeFilterChanges();
     void afterFilterChanged();
+    void orderChanged();
+
+private Q_SLOTS:
+    void slotOrderChanged(const QString &tagUrl);
 
 protected:
 

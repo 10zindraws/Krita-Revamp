@@ -42,6 +42,7 @@
 #include <KisResourceModel.h>
 #include <KisTagFilterResourceProxyModel.h>
 #include <KisResourceLoaderRegistry.h>
+#include <KisResourceTypes.h>
 
 #include "KisResourceItemListView.h"
 #include "KisResourceItemDelegate.h"
@@ -156,6 +157,14 @@ KisResourceItemChooser::KisResourceItemChooser(const QString &resourceType, bool
     d->view->setSelectionMode(QAbstractItemView::SingleSelection);
     d->view->viewport()->installEventFilter(this);
     d->view->setModel(d->tagFilterProxyModel);
+
+    // Enable drag reorder for PaintOpPresets (brush presets)
+    if (resourceType == ResourceType::PaintOpPresets) {
+        d->view->setDragReorderEnabled(true);
+        d->view->setStrictSelectionMode(false); // Allow multi-selection for reordering
+        connect(d->view, &KisResourceItemListView::resourcesReordered,
+                this, &KisResourceItemChooser::slotResourcesReordered);
+    }
 
     connect(d->tagFilterProxyModel, SIGNAL(afterFilterChanged()), this, SLOT(afterFilterChanged()));
 
@@ -900,4 +909,12 @@ void KisResourceItemChooser::updateView()
     d->deleteButton->setIcon(koIcon("edit-delete"));
     d->storagePopupButton->setIcon(koIcon("bundle_archive"));
     d->tagManager->tagChooserWidget()->updateIcons();
+}
+
+void KisResourceItemChooser::slotResourcesReordered(const QList<int> &resourceIds, int targetPosition)
+{
+    // Forward the reorder request to the proxy model
+    if (d->resourceType == ResourceType::PaintOpPresets) {
+        d->tagFilterProxyModel->moveResources(resourceIds, targetPosition);
+    }
 }

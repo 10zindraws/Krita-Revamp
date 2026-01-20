@@ -161,6 +161,7 @@ private Q_SLOTS:
     void baseLengthChanged(int length);
     void afterFilterChanged();
     void slotSaveSplitterState();
+    void slotResourcesReordered(const QList<int> &resourceIds, int targetPosition);
 
 protected:
     void showEvent(QShowEvent *event) override;

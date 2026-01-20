@@ -75,6 +75,8 @@ public Q_SLOTS:
 
 
 private:
+    void buildMenuForMultipleResources(const QList<KoResourceSP> &resources, const KisTagSP currentlySelectedTag);
+
     ///
     /// \brief m_tagModel data model for tags (for tagging and untagging resources and create lists of tags)
     ///
