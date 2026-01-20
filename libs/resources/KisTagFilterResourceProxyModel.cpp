@@ -425,7 +425,8 @@ QString KisTagFilterResourceProxyModel::getCurrentTagUrl() const
     if (d->currentTagFilter && d->currentTagFilter->valid()) {
         return d->currentTagFilter->url();
     }
-    return QString(); // Empty string represents "All" tag
+    // Use the actual "All" tag URL for consistency with saved order data
+    return KisAllTagsModel::urlAll();
 }
 
 void KisTagFilterResourceProxyModel::moveResource(int resourceId, int newPosition)

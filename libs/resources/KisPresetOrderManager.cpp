@@ -75,6 +75,7 @@ void KisPresetOrderManager::setOrderForTag(const QString &tagUrl, const QList<in
         d->orderByTag[tagUrl] = resourceIds;
         d->dirty = true;
     }
+    save(); // Save immediately to ensure persistence across sessions
     Q_EMIT orderChanged(tagUrl);
 }
 
@@ -115,6 +116,7 @@ void KisPresetOrderManager::moveResource(const QString &tagUrl, int resourceId, 
         }
         d->dirty = true;
     }
+    save(); // Save immediately to ensure persistence across sessions
     Q_EMIT orderChanged(tagUrl);
 }
 
@@ -159,6 +161,7 @@ void KisPresetOrderManager::moveResources(const QString &tagUrl, const QList<int
         }
         d->dirty = true;
     }
+    save(); // Save immediately to ensure persistence across sessions
     Q_EMIT orderChanged(tagUrl);
 }
 
