@@ -1,5 +1,5 @@
 /*
- *  SPDX-FileCopyrightText: 2024 Krita developers
+ *  SPDX-FileCopyrightText: 2026 Tenzin Rangdol <tenzindraws@gmail.com>
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -7,100 +7,57 @@
 #ifndef KIS_BRUSH_STROKE_PREVIEW_GENERATOR_H
 #define KIS_BRUSH_STROKE_PREVIEW_GENERATOR_H
 
-#include <QImage>
-#include <QSize>
-#include <QColor>
-#include <QMutex>
+#include <QList>
+#include <QObject>
+#include <QPointer>
+#include <QSet>
+#include <QVector>
 
 #include <kis_paintop_preset.h>
-#include <kis_types.h>
-#include <kritaui_export.h>
 
-class KoCanvasResourceProvider;
+class QImage;
+class KisBrushStrokePreviewCache;
+class KisPresetLivePreviewView;
 
 /**
- * @brief Generates stroke preview images for brush presets
+ * @brief Manages brush stroke preview generation and batch scheduling.
  *
- * This class generates preview images showing how a brush stroke
- * will look with pressure variation from left (low pressure) to
- * right (high pressure). It reuses the algorithm from
- * KisPresetLivePreviewView but generates the preview synchronously.
+ * This class uses KisPresetLivePreviewView to generate high-quality stroke
+ * previews using the actual Krita stroke rendering engine. It supports
+ * batch generation mode for efficient startup preview generation.
  */
-class KRITAUI_EXPORT KisBrushStrokePreviewGenerator
+class KisBrushStrokePreviewGenerator : public QObject
 {
+    Q_OBJECT
+
 public:
-    /**
-     * @brief Generate a stroke preview image for a brush preset
-     *
-     * @param preset The brush preset to generate preview for
-     * @param size The target image size (width should be larger than height for stroke preview)
-     * @param backgroundColor Background color for the preview
-     * @param foregroundColor Stroke color (default black)
-     * @return QImage containing the stroke preview, or empty image on failure
-     */
-    static QImage generateStrokePreview(
-        KisPaintOpPresetSP preset,
-        const QSize &size = QSize(200, 60),
-        const QColor &backgroundColor = QColor(200, 200, 200),
-        const QColor &foregroundColor = Qt::black
-    );
+    explicit KisBrushStrokePreviewGenerator(KisBrushStrokePreviewCache *cache);
 
-    /**
-     * @brief Check if a brush preset supports stroke preview
-     *
-     * Some brush engines (roundmarker, experimentbrush, duplicate)
-     * cannot render meaningful stroke previews.
-     *
-     * @param preset The brush preset to check
-     * @return true if stroke preview is supported, false otherwise
-     */
-    static bool supportsStrokePreview(KisPaintOpPresetSP preset);
+    void setSourceView(KisPresetLivePreviewView *view);
+    void startBatch(const QList<KisPaintOpPresetSP> &presets);
+    void requestPreview(KisPaintOpPresetSP preset);
 
+private Q_SLOTS:
+    void scheduleNextBatchGeneration();
     /**
-     * @brief Check if a brush preset needs striped background
-     *
-     * Some brush engines (colorsmudge, deformbrush, filter) work better
-     * with a striped background to show their effects.
-     *
-     * @param preset The brush preset to check
-     * @return true if striped background should be used
+     * @brief Handle completion for a presetId preview.
      */
-    static bool needsStripedBackground(KisPaintOpPresetSP preset);
+    void slotPreviewGenerated(int presetId, const QImage &previewImage);
 
 private:
-    /**
-     * @brief Paint the background for the stroke preview
-     */
-    static void paintBackground(
-        KisPaintDeviceSP device,
-        const QSize &size,
-        const QColor &backgroundColor,
-        bool striped
-    );
+    bool startNextPresetGeneration(KisPresetLivePreviewView *view);
+    void finalizeBatchGeneration();
+    void clearPreviewPool(KisPresetLivePreviewView *keepView);
+    void rebuildPreviewPool();
 
-    /**
-     * @brief Paint the S-curve stroke
-     */
-    static void paintStroke(
-        KisImageSP image,
-        KisPaintLayerSP layer,
-        KisPaintOpPresetSP preset,
-        const QSize &size,
-        const QColor &foregroundColor
-    );
-
-    /**
-     * @brief Paint a wavy stroke for sketch/curve/particle brushes
-     */
-    static void paintWavyStroke(
-        KisImageSP image,
-        KisPaintLayerSP layer,
-        KisPaintOpPresetSP preset,
-        const QSize &size,
-        const QColor &foregroundColor
-    );
-
-    static QMutex s_mutex;
+    KisBrushStrokePreviewCache *m_cache = nullptr;
+    QPointer<KisPresetLivePreviewView> m_livePreviewView;
+    QVector<QPointer<KisPresetLivePreviewView>> m_previewPool;
+    QSet<KisPresetLivePreviewView*> m_busyPreviewViews;
+    QSet<int> m_pendingPresetIds;
+    QList<KisPaintOpPresetSP> m_startupPresets;
+    int m_startupGenerationIndex = 0;
+    bool m_batchMode = false;
 };
 
-#endif // KIS_BRUSH_STROKE_PREVIEW_GENERATOR_H
+#endif

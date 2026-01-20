@@ -4,19 +4,22 @@
  *  SPDX-FileCopyrightText: 2011 Silvio Heinrich <plassy@web.de>
  *  SPDX-FileCopyrightText: 2011 Srikanth Tiyyagura <srikanth.tulasiram@gmail.com>
  *  SPDX-FileCopyrightText: 2011 José Luis Vergara <pentalis@gmail.com>
+ *  SPDX-FileCopyrightText: 2026 Tenzin Rangdol <tenzindraws@gmail.com>
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "kis_preset_chooser.h"
 
+#include <QEvent>
 #include <QVBoxLayout>
 #include <QPainter>
 #include <QAbstractItemDelegate>
+#include <QAbstractItemView>
 #include <QStyleOptionViewItem>
-#include <QSortFilterProxyModel>
+#include <QPalette>
+#include <QTimer>
 #include <KisResourceModel.h>
-#include <QApplication>
 
 #include <kis_config.h>
 #include <klocalizedstring.h>
@@ -33,30 +36,39 @@
 #include <brushengine/kis_paintop_preset.h>
 #include "kis_config_notifier.h"
 #include <kis_icon.h>
-#include <KisResourceModelProvider.h>
 #include <KisTagFilterResourceProxyModel.h>
 #include <KisResourceThumbnailCache.h>
 #include "KisBrushStrokePreviewCache.h"
-#include "KisBrushStrokePreviewGenerator.h"
 #include "KisPaintOpPresetSessionStorage.h"
 
-
-/// The resource item delegate for rendering the resource preview
+/// Resource item delegate for rendering brush stroke previews
 class KisPresetDelegate : public QAbstractItemDelegate
 {
 public:
-    KisPresetDelegate(QObject * parent = 0)
+    // Stroke preview ratio range: 1:3 to 1:4.
+    static constexpr int SLIDER_MIN = 30;
+    static constexpr int SLIDER_MAX = 80;
+    static constexpr double ASPECT_RATIO_MIN = 3.0;
+    static constexpr double ASPECT_RATIO_MAX = 4.0;
+
+    KisPresetDelegate(QObject * parent = nullptr)
         : QAbstractItemDelegate(parent)
         , m_showText(false)
-        , m_viewMode(KisPresetChooser::THUMBNAIL) {}
+        , m_viewMode(KisPresetChooser::THUMBNAIL)
+        , m_useDirtyPresets(false)
+        , m_iconSize(50) {}
 
     ~KisPresetDelegate() override {}
 
     /// reimplemented
     void paint(QPainter *, const QStyleOptionViewItem &, const QModelIndex &) const override;
 
-    /// reimplemented
     QSize sizeHint(const QStyleOptionViewItem & option, const QModelIndex &) const override {
+        if (m_viewMode == KisPresetChooser::STROKE) {
+            int height = m_iconSize;
+            int width = static_cast<int>(height * calculateAspectRatio(m_iconSize));
+            return QSize(width, height);
+        }
         return option.decorationSize;
     }
 
@@ -68,16 +80,34 @@ public:
         m_viewMode = mode;
     }
 
-    KisPresetChooser::ViewMode viewMode() const {
-        return m_viewMode;
+    void setUseDirtyPresets(bool value) {
+        m_useDirtyPresets = value;
+    }
+
+    void setIconSize(int size) {
+        m_iconSize = qBound(SLIDER_MIN, size, SLIDER_MAX);
+    }
+
+    /// Interpolate aspect ratio from slider.
+    static double calculateAspectRatio(int iconSize) {
+        int clampedSize = qBound(SLIDER_MIN, iconSize, SLIDER_MAX);
+        double t = static_cast<double>(clampedSize - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN);
+        return ASPECT_RATIO_MIN + t * (ASPECT_RATIO_MAX - ASPECT_RATIO_MIN);
+    }
+
+    static QSize calculateStrokeThumbnailSize(int iconSize) {
+        int clampedSize = qBound(SLIDER_MIN, iconSize, SLIDER_MAX);
+        double aspectRatio = calculateAspectRatio(clampedSize);
+        return QSize(static_cast<int>(clampedSize * aspectRatio), clampedSize);
     }
 
 private:
     void paintThumbnail(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
     void paintStrokePreview(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
-
     bool m_showText;
     KisPresetChooser::ViewMode m_viewMode;
+    bool m_useDirtyPresets;
+    int m_iconSize;
 };
 
 void KisPresetDelegate::paint(QPainter * painter, const QStyleOptionViewItem & option, const QModelIndex & index) const
@@ -93,7 +123,6 @@ void KisPresetDelegate::paint(QPainter * painter, const QStyleOptionViewItem & o
         return;
     }
 
-    // Dispatch to appropriate paint method based on view mode
     if (m_viewMode == KisPresetChooser::STROKE) {
         paintStrokePreview(painter, option, index);
     } else {
@@ -105,6 +134,7 @@ void KisPresetDelegate::paint(QPainter * painter, const QStyleOptionViewItem & o
 
 void KisPresetDelegate::paintThumbnail(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
+
     bool dirty = index.data(Qt::UserRole + KisAbstractResourceModel::Dirty).toBool();
 
     QImage preview = KisResourceThumbnailCache::instance()->getImage(index);
@@ -138,38 +168,22 @@ void KisPresetDelegate::paintThumbnail(QPainter *painter, const QStyleOptionView
         // Put an asterisk after the preset if it is dirty. This will help in case the pixmap icon is too small
 
         QString dirtyPresetIndicator = QString("");
-        if (dirty) {
+        if (m_useDirtyPresets && dirty) {
             dirtyPresetIndicator = QString("*");
         }
 
-        QString presetDisplayName = index.data(Qt::UserRole + KisAbstractResourceModel::Name).toString().replace("_", " ");
+        QString presetDisplayName = index.data(Qt::UserRole + KisAbstractResourceModel::Name).toString().replace("_", " "); // don't need underscores that might be part of the file name
         painter->drawText(pixSize.width() + 10, option.rect.y() + option.rect.height() - 10, presetDisplayName.append(dirtyPresetIndicator));
 
     }
 
-    if (dirty) {
+    if (m_useDirtyPresets && dirty) {
         const QIcon icon = KisIconUtils::loadIcon("dirty-preset");
         QPixmap pixmap = icon.pixmap(QSize(16,16));
         painter->drawPixmap(paintRect.x() + 3, paintRect.y() + 3, pixmap);
     }
 
-    bool broken = false;
-    QMap<QString, QVariant> metaData = index.data(Qt::UserRole + KisAbstractResourceModel::MetaData).value<QMap<QString, QVariant>>();
-    QStringList requiredBrushes = metaData["dependent_resources_filenames"].toStringList();
-    if (!requiredBrushes.isEmpty()) {
-        KisAllResourcesModel *model = KisResourceModelProvider::resourceModel(ResourceType::Brushes);
-        Q_FOREACH(const QString brushFile, requiredBrushes) {
-            if (!model->resourceExists("", brushFile, "")) {
-                qWarning() << "dependent resource" << brushFile << "misses.";
-                broken = true;
-            }
-        }
-    }
-
-    if (broken) {
-        const QIcon icon = KisIconUtils::loadIcon("broken-preset");
-        icon.paint(painter, QRect(paintRect.x() + paintRect.height() - 25, paintRect.y() + paintRect.height() - 25, 25, 25));
-    }
+    // Note: BrokenStatus not available in Krita 5.2.14 resource model
 
     if (option.state & QStyle::State_Selected) {
         painter->setCompositionMode(QPainter::CompositionMode_HardLight);
@@ -179,7 +193,7 @@ void KisPresetDelegate::paintThumbnail(QPainter *painter, const QStyleOptionView
         // highlight is not strong enough to pick out preset. draw border around it.
         painter->setCompositionMode(QPainter::CompositionMode_SourceOver);
         painter->setPen(QPen(option.palette.highlight(), 4, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin));
-        QRect selectedBorder = option.rect.adjusted(2 , 2, -2, -2);
+        QRect selectedBorder = option.rect.adjusted(2 , 2, -2, -2); // constrict the rectangle so it doesn't bleed into other presets
         painter->drawRect(selectedBorder);
     }
 }
@@ -188,7 +202,6 @@ void KisPresetDelegate::paintStrokePreview(QPainter *painter, const QStyleOption
 {
     bool dirty = index.data(Qt::UserRole + KisAbstractResourceModel::Dirty).toBool();
 
-    // Get the brush preset from the model
     KoResourceSP resource;
     const KisAbstractResourceModel *resourceModel = dynamic_cast<const KisAbstractResourceModel*>(index.model());
     if (resourceModel) {
@@ -197,94 +210,93 @@ void KisPresetDelegate::paintStrokePreview(QPainter *painter, const QStyleOption
     KisPaintOpPresetSP preset = resource.dynamicCast<KisPaintOpPreset>();
 
     qreal devicePixelRatioF = painter->device()->devicePixelRatioF();
+    const bool isSelected = option.state & QStyle::State_Selected;
 
-    // Colors for stroke preview mode
-    const QColor backgroundColor(0x53, 0x53, 0x53);  // #535353
-    const QColor borderColor(0x45, 0x45, 0x45);      // #454545
-    const QColor textColor(0xCC, 0xCC, 0xCC);        // Light gray text
+    const QColor backgroundColor = option.palette.color(QPalette::Window);
+    const QColor borderColor = option.palette.color(QPalette::Mid);
+    QColor textColor = option.palette.color(QPalette::Text);
+    if (isSelected) {
+        textColor = textColor.lightnessF() < 0.5 ? QColor(Qt::black) : QColor(Qt::white);
+    }
 
-    // Draw border around the entire cell
     painter->fillRect(option.rect, borderColor);
-
-    // Inner rect after 2px border
     QRect innerRect = option.rect.adjusted(2, 2, -2, -2);
-
-    // Fill with background color
     painter->fillRect(innerRect, backgroundColor);
+    if (isSelected) {
+        const QColor accentColor = option.palette.highlight().color();
+        const qreal bgLightness = backgroundColor.lightnessF();
+        const qreal accentLightness = accentColor.lightnessF();
+        const bool sameSide =
+            (bgLightness >= 0.5 && accentLightness >= 0.5) ||
+            (bgLightness < 0.5 && accentLightness < 0.5);
+        if (sameSide) {
+            painter->setCompositionMode(QPainter::CompositionMode_HardLight);
+            painter->setOpacity(1.0);
+            painter->fillRect(innerRect, accentColor);
+            painter->setCompositionMode(QPainter::CompositionMode_SourceOver);
+        }
+    }
 
-    // Calculate stroke preview area (leave space for text at bottom)
-    const int textHeight = 18;  // Height reserved for brush name
+    // Keep text height fixed; stroke area shrinks.
+    QFontMetrics fm(painter->font());
+    const int bottomPadding = 1;
+    const int textAreaHeight = fm.height() + 4 + bottomPadding;
+    const int textAreaTopTrim = 3;
+
     QRect strokeRect = innerRect;
-    strokeRect.setHeight(innerRect.height() - textHeight);
+    strokeRect.setHeight(qMax(10, innerRect.height() - (textAreaHeight - textAreaTopTrim)));
 
     QSize previewSize = strokeRect.size() * devicePixelRatioF;
 
+    const QString paintOpId = preset ? preset->paintOp().id() : QString();
+    const bool useStripedBackground = KisBrushStrokePreviewCache::needsStripedBackground(paintOpId);
+
     QImage strokePreview;
     if (preset) {
-        // Get cached stroke preview or generate new one
         strokePreview = KisBrushStrokePreviewCache::instance()->getPreview(preset, previewSize);
     }
-
     if (strokePreview.isNull()) {
-        // Fallback: draw a placeholder
         strokePreview = QImage(previewSize, QImage::Format_ARGB32_Premultiplied);
-        strokePreview.fill(backgroundColor);
+        strokePreview.fill(Qt::transparent);
     }
 
-    strokePreview.setDevicePixelRatio(devicePixelRatioF);
+    if (useStripedBackground) {
+        strokePreview.setDevicePixelRatio(devicePixelRatioF);
+        painter->drawImage(strokeRect.topLeft(), strokePreview);
+    } else {
+        QImage tinted = strokePreview.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        QPainter maskPainter(&tinted);
+        maskPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        maskPainter.fillRect(tinted.rect(), textColor);
+        maskPainter.end();
+        tinted.setDevicePixelRatio(devicePixelRatioF);
+        painter->drawImage(strokeRect.topLeft(), tinted);
+    }
 
-    // Draw the stroke preview
-    painter->drawImage(strokeRect.topLeft(), strokePreview);
-
-    // Draw the preset name below the stroke
-    QString presetDisplayName = index.data(Qt::UserRole + KisAbstractResourceModel::Name).toString().replace("_", " ");
+    QString presetDisplayName = index.data(Qt::UserRole + KisAbstractResourceModel::Name)
+                                    .toString()
+                                    .replace(QLatin1Char('_'), QLatin1Char(' '));
     if (dirty) {
-        presetDisplayName.append("*");
+        presetDisplayName.append(QLatin1Char('*'));
     }
-
-    // Elide text if too long
-    QFontMetrics fm(painter->font());
-    QString elidedName = fm.elidedText(presetDisplayName, Qt::ElideRight, innerRect.width() - 4);
+    QString elidedName = fm.elidedText(presetDisplayName, Qt::ElideRight, innerRect.width() - 14);
 
     QRect textRect = innerRect;
-    textRect.setTop(strokeRect.bottom());
+    textRect.setTop(innerRect.bottom() - textAreaHeight);
+    textRect.setLeft(innerRect.left() + 7);
+    textRect.setBottom(innerRect.bottom() - bottomPadding);
     painter->setPen(textColor);
-    painter->drawText(textRect, Qt::AlignCenter, elidedName);
+    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedName);
 
-    // Draw dirty indicator
     if (dirty) {
-        const QIcon icon = KisIconUtils::loadIcon("dirty-preset");
+        const QIcon icon = KisIconUtils::loadIcon(QStringLiteral("dirty-preset"));
         QPixmap pixmap = icon.pixmap(QSize(16, 16));
         painter->drawPixmap(innerRect.x() + 3, innerRect.y() + 3, pixmap);
     }
 
-    // Check for broken preset
-    bool broken = false;
-    QMap<QString, QVariant> metaData = index.data(Qt::UserRole + KisAbstractResourceModel::MetaData).value<QMap<QString, QVariant>>();
-    QStringList requiredBrushes = metaData["dependent_resources_filenames"].toStringList();
-    if (!requiredBrushes.isEmpty()) {
-        KisAllResourcesModel *model = KisResourceModelProvider::resourceModel(ResourceType::Brushes);
-        Q_FOREACH(const QString brushFile, requiredBrushes) {
-            if (!model->resourceExists("", brushFile, "")) {
-                broken = true;
-                break;
-            }
-        }
-    }
+    // Note: BrokenStatus not available in Krita 5.2.14 resource model
 
-    if (broken) {
-        const QIcon icon = KisIconUtils::loadIcon("broken-preset");
-        icon.paint(painter, QRect(innerRect.right() - 25, innerRect.y() + 3, 22, 22));
-    }
-
-    // Draw selection highlight
-    if (option.state & QStyle::State_Selected) {
-        painter->setCompositionMode(QPainter::CompositionMode_HardLight);
-        painter->setOpacity(1.0);
-        painter->fillRect(option.rect, option.palette.highlight());
-
-        // Draw border
-        painter->setCompositionMode(QPainter::CompositionMode_SourceOver);
+    if (isSelected) {
         painter->setPen(QPen(option.palette.highlight(), 4, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin));
         QRect selectedBorder = option.rect.adjusted(2, 2, -2, -2);
         painter->drawRect(selectedBorder);
@@ -297,7 +309,7 @@ KisPresetChooser::KisPresetChooser(QWidget *parent)
     setObjectName("KisPresetChooser");
 
     QVBoxLayout * layout = new QVBoxLayout(this);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     m_chooser = new KisResourceItemChooser(ResourceType::PaintOpPresets, false, this);
     m_chooser->setRowHeight(50);
@@ -308,34 +320,35 @@ KisPresetChooser::KisPresetChooser(QWidget *parent)
     layout->addWidget(m_chooser);
 
     connect(m_chooser, SIGNAL(resourceSelected(KoResourceSP )),
-            this, SLOT(slotResourceWasSelected(KoResourceSP )));
-
-    connect(m_chooser, SIGNAL(resourceSelected(KoResourceSP )),
             this, SIGNAL(resourceSelected(KoResourceSP )));
     connect(m_chooser, SIGNAL(resourceClicked(KoResourceSP )),
             this, SIGNAL(resourceClicked(KoResourceSP )));
 
-    connect(m_chooser, &KisResourceItemChooser::listViewModeChanged, this, &KisPresetChooser::showHideBrushNames);
+    connect(m_chooser, SIGNAL(listViewModeChanged(ListViewMode)),
+            this, SLOT(showHideBrushNames(ListViewMode)));
 
-    // Connect to stroke preview cache to update view when previews are ready
-    connect(KisBrushStrokePreviewCache::instance(), &KisBrushStrokePreviewCache::previewReady,
-            this, &KisPresetChooser::slotStrokePreviewReady);
+    connect(KisBrushStrokePreviewCache::instance(), SIGNAL(sigPreviewReady(int)),
+            this, SLOT(slotStrokePreviewReady(int)));
 
-    // Connect to session storage signals to invalidate stroke preview when settings change
-    // This is the proper hook - it only fires when user actually modifies settings in the UI,
-    // not during painting or other internal state changes
-    connect(KisPaintOpPresetSessionStorage::instance(), &KisPaintOpPresetSessionStorage::sigTweaksSaved,
-            this, &KisPresetChooser::slotCurrentPresetChanged);
-    connect(KisPaintOpPresetSessionStorage::instance(), &KisPaintOpPresetSessionStorage::sigTweaksCleared,
-            this, &KisPresetChooser::slotCurrentPresetChanged);
+    // Connect to session storage signals for persistent tweaks integration.
+    // This ensures the stroke preview view is updated when user modifies brush settings.
+    KisPaintOpPresetSessionStorage *sessionStorage = KisPaintOpPresetSessionStorage::instance();
+    if (sessionStorage) {
+        connect(sessionStorage, &KisPaintOpPresetSessionStorage::sigTweaksSaved,
+                this, &KisPresetChooser::slotSessionTweaksSaved);
+        connect(sessionStorage, &KisPaintOpPresetSessionStorage::sigTweaksCleared,
+                this, &KisPresetChooser::slotSessionTweaksCleared);
+    }
 
     m_mode = ViewMode::THUMBNAIL;
 
     connect(KisConfigNotifier::instance(), SIGNAL(configChanged()),
             SLOT(notifyConfigChanged()));
 
-
     notifyConfigChanged();
+
+    // Pre-generate stroke previews.
+    QTimer::singleShot(0, this, SLOT(slotGenerateStrokePreviews()));
 }
 
 KisPresetChooser::~KisPresetChooser()
@@ -346,6 +359,7 @@ void KisPresetChooser::setViewMode(KisPresetChooser::ViewMode mode)
 {
     m_mode = mode;
     updateViewSettings();
+    KisBrushStrokePreviewCache::instance()->generateAllPreviews();
 }
 
 void KisPresetChooser::setViewModeToThumbnail()
@@ -366,47 +380,10 @@ void KisPresetChooser::setViewModeToStroke()
 void KisPresetChooser::notifyConfigChanged()
 {
     KisConfig cfg(true);
-    setIconSize(cfg.presetIconSize());
-}
-
-void KisPresetChooser::slotResourceWasSelected(KoResourceSP resource)
-{
-    m_currentPresetConnections.clear();
-    if (!resource) return;
-
-    KisPaintOpPresetSP preset = resource.dynamicCast<KisPaintOpPreset>();
-    KIS_SAFE_ASSERT_RECOVER_RETURN(preset);
-
-    // Note: We intentionally do NOT connect to sigSettingsChanged here.
-    // The stroke preview cache should only be invalidated when the preset
-    // is explicitly changed/reloaded, not on every settings modification.
-    // Live-updating previews during settings tweaks is expensive and causes
-    // the preview to flash constantly. The cache handles misses gracefully.
-}
-
-void KisPresetChooser::slotCurrentPresetChanged(const QString &presetName)
-{
-    // This slot is connected to KisPaintOpPresetSessionStorage signals
-    // which fire only when the user actually modifies brush settings in the UI.
-    // This is the proper hook for stroke preview invalidation - it won't fire
-    // during painting or other internal state changes.
-    
-    if (presetName.isEmpty()) return;
-    
-    // Only invalidate if we're in stroke view mode
-    if (m_mode != ViewMode::STROKE) return;
-
-    // Invalidate the stroke preview cache for this preset
-    KisBrushStrokePreviewCache::instance()->invalidatePreset(presetName);
-
-    // Find the model index for this preset and notify about change
-    KoResourceSP currentResource = m_chooser->currentResource();
-    if (currentResource && currentResource->name() == presetName) {
-        QModelIndex index = m_chooser->tagFilterModel()->indexForResource(currentResource);
-        Q_EMIT m_chooser->tagFilterModel()->dataChanged(index,
-                                                   index,
-                                                   {Qt::UserRole + KisAbstractResourceModel::Thumbnail});
-    }
+    m_delegate->setUseDirtyPresets(cfg.useDirtyPresets());
+    int newIconSize = cfg.presetIconSize();
+    m_delegate->setIconSize(newIconSize);
+    setIconSize(newIconSize);
 }
 
 void KisPresetChooser::updateViewSettings()
@@ -425,19 +402,17 @@ void KisPresetChooser::updateViewSettings()
         break;
     }
     case ViewMode::STROKE: {
-        // Use Detail list view mode for horizontal rectangles with name
-        m_chooser->setListViewMode(ListViewMode::Detail);
-        m_delegate->setShowText(false);  // We draw text ourselves in stroke mode
+        m_chooser->setListViewMode(ListViewMode::IconGrid);
+        m_delegate->setShowText(false);
         m_delegate->setViewMode(ViewMode::STROKE);
 
-        // Pre-generate all stroke previews in the background
-        // Use a reasonable default size for the preview
-        QSize previewSize = m_chooser->itemView()->iconSize();
-        if (!previewSize.isEmpty()) {
-            qreal devicePixelRatio = m_chooser->itemView()->devicePixelRatioF();
-            previewSize *= devicePixelRatio;
-            KisBrushStrokePreviewCache::instance()->preGenerateAllPreviews(previewSize);
-        }
+        int currentIconSize = iconSize();
+        m_delegate->setIconSize(currentIconSize);
+        QSize thumbnailSize = KisPresetDelegate::calculateStrokeThumbnailSize(currentIconSize);
+
+        m_chooser->itemView()->setGridSize(thumbnailSize);
+        m_chooser->itemView()->setIconSize(thumbnailSize);
+        m_chooser->itemView()->doItemsLayout();
         break;
     }
     }
@@ -477,6 +452,17 @@ void KisPresetChooser::setIconSize(int newSize)
 {
     KisResourceItemChooserSync* chooserSync = KisResourceItemChooserSync::instance();
     chooserSync->setBaseLength(newSize);
+
+    if (m_mode == ViewMode::STROKE) {
+        m_delegate->setIconSize(newSize);
+        QSize thumbnailSize = KisPresetDelegate::calculateStrokeThumbnailSize(newSize);
+
+        m_chooser->itemView()->setGridSize(thumbnailSize);
+        m_chooser->itemView()->setIconSize(thumbnailSize);
+        m_chooser->itemView()->doItemsLayout();
+    }
+
+    KisBrushStrokePreviewCache::instance()->generateAllPreviews();
 }
 
 int KisPresetChooser::iconSize()
@@ -487,20 +473,33 @@ int KisPresetChooser::iconSize()
 
 void KisPresetChooser::saveIconSize()
 {
-    // save icon size
     if (KisConfig(true).presetIconSize() != iconSize()) {
         KisConfig(false).setPresetIconSize(iconSize());
     }
 }
 
+void KisPresetChooser::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::PaletteChange) {
+        if (m_mode == ViewMode::STROKE) {
+            m_chooser->itemView()->viewport()->update();
+        }
+    }
+}
+
 void KisPresetChooser::showHideBrushNames(ListViewMode newViewMode)
 {
-    // In STROKE mode, we always draw text ourselves (ignore view mode changes)
     if (m_mode == ViewMode::STROKE) {
         m_delegate->setShowText(false);
+        // Restore non-square grid size.
+        int currentIconSize = iconSize();
+        QSize thumbnailSize = KisPresetDelegate::calculateStrokeThumbnailSize(currentIconSize);
+        m_chooser->itemView()->setGridSize(thumbnailSize);
+        m_chooser->itemView()->setIconSize(thumbnailSize);
+        m_chooser->itemView()->doItemsLayout();
         return;
     }
-
     switch (newViewMode) {
     case ListViewMode::Detail: {
         m_delegate->setShowText(true);
@@ -512,13 +511,58 @@ void KisPresetChooser::showHideBrushNames(ListViewMode newViewMode)
     }
 }
 
-void KisPresetChooser::slotStrokePreviewReady(const QString &presetName)
+void KisPresetChooser::slotStrokePreviewReady(int presetId)
+{
+    if (m_mode != ViewMode::STROKE) {
+        return;
+    }
+
+    KisTagFilterResourceProxyModel *model = m_chooser->tagFilterModel();
+    if (!model) {
+        m_chooser->itemView()->viewport()->update();
+        return;
+    }
+
+    QModelIndex index = model->indexForResourceId(presetId);
+    if (!index.isValid()) {
+        return;
+    }
+
+    const QRect rect = m_chooser->itemView()->visualRect(index);
+    if (!rect.isValid()) {
+        return;
+    }
+
+    m_chooser->itemView()->viewport()->update(rect);
+}
+
+void KisPresetChooser::slotGenerateStrokePreviews()
+{
+    KisBrushStrokePreviewCache::instance()->generateAllPreviews();
+}
+
+void KisPresetChooser::slotSessionTweaksSaved(const QString &presetName)
 {
     Q_UNUSED(presetName);
-
-    // Only update if we're in stroke mode
-    if (m_mode == ViewMode::STROKE) {
-        // Trigger a repaint of the view
-        m_chooser->itemView()->viewport()->update();
+    // When user saves tweaks, the cache will be invalidated via session storage signals
+    // connected to KisBrushStrokePreviewCache. Here we just need to update the view.
+    if (m_mode != ViewMode::STROKE) {
+        return;
     }
+
+    // Trigger a repaint
+    m_chooser->itemView()->viewport()->update();
+}
+
+void KisPresetChooser::slotSessionTweaksCleared(const QString &presetName)
+{
+    Q_UNUSED(presetName);
+    // When user clears tweaks, the cache will be invalidated via session storage signals
+    // connected to KisBrushStrokePreviewCache. Here we just need to update the view.
+    if (m_mode != ViewMode::STROKE) {
+        return;
+    }
+
+    // Trigger a repaint
+    m_chooser->itemView()->viewport()->update();
 }

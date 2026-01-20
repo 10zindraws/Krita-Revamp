@@ -1,5 +1,5 @@
 /*
- *  SPDX-FileCopyrightText: 2024 Krita developers
+ *  SPDX-FileCopyrightText: 2026 Tenzin Rangdol <tenzindraws@gmail.com>
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -7,164 +7,106 @@
 #ifndef KIS_BRUSH_STROKE_PREVIEW_CACHE_H
 #define KIS_BRUSH_STROKE_PREVIEW_CACHE_H
 
-#include <QHash>
 #include <QImage>
-#include <QMutex>
+#include <QObject>
+#include <QScopedPointer>
 #include <QSize>
 #include <QString>
-#include <QList>
-#include <QSet>
-#include <QObject>
-#include <QThreadPool>
+#include <QVariant>
 
 #include <kis_paintop_preset.h>
 #include <kritaui_export.h>
 
+class KisPresetLivePreviewView;
+
 /**
- * @brief Cache for brush stroke preview images
+ * Thread-safe LRU cache for brush stroke preview images.
+ * Previews are generated via KisPresetLivePreviewView and persisted to disk.
  *
- * This class provides a thread-safe LRU cache for storing
- * pre-generated stroke preview images. It helps improve
- * performance when displaying brush presets in stroke preview mode.
- *
- * Preview generation is done asynchronously to avoid blocking
- * the UI during paint events. When a preview is not cached,
- * a placeholder is returned and generation is scheduled.
+ * This version integrates with KisPaintOpPresetSessionStorage to ensure
+ * stroke previews reflect any user-modified brush tweaks.
  */
 class KRITAUI_EXPORT KisBrushStrokePreviewCache : public QObject
 {
     Q_OBJECT
 
 public:
-    /**
-     * @brief Get the singleton instance
-     */
     static KisBrushStrokePreviewCache* instance();
 
-    /**
-     * @brief Get cached preview or placeholder if not exists
-     *
-     * This method is non-blocking. If the preview is not cached,
-     * it returns a placeholder and schedules background generation.
-     * The previewReady signal will be emitted when generation completes.
-     *
-     * @param preset The brush preset
-     * @param size The requested preview size
-     * @return The cached preview image or a placeholder
-     */
+    /// True if paint engine needs striped background (colorsmudge, deform, filter).
+    static bool needsStripedBackground(const QString &paintOpId);
+
+    /// True if paint engine has no preview support.
+    static bool isNoPreviewEngine(const QString &paintOpId);
+
+    /// Get cached preview scaled to size, or placeholder if not cached.
     QImage getPreview(KisPaintOpPresetSP preset, const QSize &size);
 
-    /**
-     * @brief Invalidate cache for a specific preset
-     *
-     * Call this when a preset's settings have changed.
-     *
-     * @param presetName The name of the preset to invalidate
-     */
-    void invalidatePreset(const QString &presetName);
+    /// Invalidate cache for a preset when its settings change.
+    void invalidatePreset(int presetId);
 
-    /**
-     * @brief Clear the entire cache
-     */
-    void clearCache();
+    /// Invalidate cache for a preset by name (for backward compatibility with session storage signals).
+    void invalidatePresetByName(const QString &presetName);
 
-    /**
-     * @brief Set maximum cache size (number of entries)
-     *
-     * @param size Maximum number of cache entries
-     */
-    void setMaxCacheSize(int size);
+    /// Generate previews for all presets not already cached.
+    void generateAllPreviews();
 
-    /**
-     * @brief Get current cache size
-     *
-     * @return Number of entries currently in cache
-     */
-    int cacheSize() const;
-
-    /**
-     * @brief Check if a preview is cached
-     *
-     * @param preset The brush preset
-     * @param size The preview size
-     * @return true if preview is cached
-     */
-    bool isCached(KisPaintOpPresetSP preset, const QSize &size) const;
-
-    /**
-     * @brief Pre-generate previews for all brush presets
-     *
-     * This should be called on startup to warm the cache and prevent
-     * lag when scrolling through presets.
-     *
-     * @param size The preview size to generate
-     */
-    void preGenerateAllPreviews(const QSize &size);
+    /// Register live preview view for generating stroke previews.
+    void registerLivePreviewView(KisPresetLivePreviewView *view);
 
 Q_SIGNALS:
-    /**
-     * @brief Emitted when a preview has been generated
-     *
-     * Connect to this signal to trigger a repaint when previews are ready.
-     *
-     * @param presetName The name of the preset
-     */
-    void previewReady(const QString &presetName);
+    /// Emitted when a preview is ready; triggers UI repaint.
+    void sigPreviewReady(int presetId);
 
 public Q_SLOTS:
-    /**
-     * @brief Handle completed preview generation
-     */
-    void onPreviewGenerated(const QString &key, const QString &presetName,
-                            const QImage &preview);
+    /// Receive preview image from live preview view.
+    void slotLivePreviewImageReady(int presetId, const QImage &previewImage);
+
+    /// Handle preset settings change.
+    void slotPresetSettingsChanged(KisPaintOpPresetSP preset);
+
+    /// Track current preset for settings change detection.
+    void slotSetCurrentPreset(KisPaintOpPresetSP preset);
+
+    /// Handle canvas resource changes (size, flow, opacity, rotation).
+    void slotCanvasResourceChanged(int key, const QVariant &value);
+
+private Q_SLOTS:
+    void slotCurrentPresetSettingsChanged();
+    void slotScheduleGenerateAllPreviews();
+    void slotRunGenerateAllPreviews();
+
+    /// Handle session storage signals for persistent tweaks integration.
+    void slotSessionTweaksSaved(const QString &presetName);
+    void slotSessionTweaksCleared(const QString &presetName);
 
 private:
     KisBrushStrokePreviewCache();
-    ~KisBrushStrokePreviewCache();
+    ~KisBrushStrokePreviewCache() override;
+    Q_DISABLE_COPY(KisBrushStrokePreviewCache)
 
-    // Disable copy
-    KisBrushStrokePreviewCache(const KisBrushStrokePreviewCache&) = delete;
-    KisBrushStrokePreviewCache& operator=(const KisBrushStrokePreviewCache&) = delete;
-
-    /**
-     * @brief Generate cache key from preset name and size
-     */
-    QString generateCacheKey(const QString &presetName, const QSize &size) const;
-
-    /**
-     * @brief Evict least recently used entries if cache is full
-     */
+    QString generateCacheKey(int presetId) const;
+    QString generateSizedCacheKey(int presetId, const QSize &size) const;
     void evictIfNeeded();
-
-    /**
-     * @brief Update access order for LRU tracking
-     */
     void updateAccessOrder(const QString &key);
-
-    /**
-     * @brief Generate a placeholder image
-     */
     QImage generatePlaceholder(const QSize &size) const;
+    QImage generateNoPreviewPlaceholder(const QSize &size) const;
+    QString generateSettingsFingerprint(KisPaintOpPresetSP preset) const;
+    QImage scalePreviewToSize(const QImage &source, const QSize &targetSize) const;
 
-    /**
-     * @brief Schedule background generation for a preset
-     */
-    void scheduleGeneration(KisPaintOpPresetSP preset, const QSize &size,
-                            const QString &key);
+    /// Find preset ID by name (for session storage signals).
+    int findPresetIdByName(const QString &presetName) const;
 
-    struct CacheEntry {
-        QImage image;
-    };
+    // Disk cache
+    void initDiskCache();
+    QString getDiskCacheFilename(int presetId) const;
+    bool loadFromDiskCache(int presetId, QImage &image);
+    void saveToDiskCache(int presetId, const QImage &image);
+    bool hasDiskCache(int presetId) const;
+    void removeDiskCache(int presetId);
 
-    mutable QMutex m_mutex;
-    QHash<QString, CacheEntry> m_cache;
-    QList<QString> m_accessOrder;  // For LRU eviction (front = oldest)
-    QSet<QString> m_pendingGenerations;  // Keys currently being generated
-    QSet<QString> m_preGeneratedSizes;   // Sizes that have been pre-generated
-    int m_maxCacheSize;
-    QThreadPool m_threadPool;  // Dedicated pool with limited threads
-
-    static KisBrushStrokePreviewCache* s_instance;
+    struct Private;
+    QScopedPointer<Private> m_d;
 };
 
 #endif // KIS_BRUSH_STROKE_PREVIEW_CACHE_H

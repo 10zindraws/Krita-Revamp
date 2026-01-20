@@ -2,6 +2,7 @@
  *  SPDX-FileCopyrightText: 2002 Patrick Julien <freak@codepimps.org>
  *  SPDX-FileCopyrightText: 2011 Silvio Heinrich <plassy@web.de>
  *  SPDX-FileCopyrightText: 2011 José Luis Vergara <pentalis@gmail.com>
+ *  SPDX-FileCopyrightText: 2026 Tenzin Rangdol <tenzindraws@gmail.com>
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -9,12 +10,10 @@
 #define KIS_PRESET_CHOOSER_H_
 
 #include <QWidget>
-#include <QScroller>
 #include <QPointer>
 
 #include <KoResource.h>
 #include <KoID.h>
-#include "kis_signal_auto_connection.h"
 #include "ResourceListViewModes.h"
 
 class KoAbstractResourceServerAdapter;
@@ -39,9 +38,9 @@ public:
     ~KisPresetChooser() override;
 
     enum ViewMode {
-        THUMBNAIL,  /// Shows thumbnails
-        DETAIL,     /// Shows thumbnails with text next to it
-        STROKE      /// Shows stroke previews with brush name
+        THUMBNAIL, /// Shows thumbnails
+        DETAIL,    /// Shows thumbnails with text next to it
+        STROKE     /// Shows stroke previews with text
     };
 
     /// Sets a list of resources in the paintop list, when ever user press enter in the lineedit of paintop_presets_popup Class
@@ -83,22 +82,22 @@ public Q_SLOTS:
     /// KisResourceItemChooser is in horizontal layout.
     void showHideBrushNames(ListViewMode newViewMode);
 
+protected:
+    void changeEvent(QEvent *event) override;
+
 private Q_SLOTS:
     void notifyConfigChanged();
-    void slotResourceWasSelected(KoResourceSP resource);
-    void slotCurrentPresetChanged(const QString &presetName);
-    void slotStrokePreviewReady(const QString &presetName);
+    void slotStrokePreviewReady(int presetId);
+    void slotGenerateStrokePreviews();
+
+    /// Handle session storage signals for persistent tweaks integration.
+    void slotSessionTweaksSaved(const QString &presetName);
+    void slotSessionTweaksCleared(const QString &presetName);
 
 private:
-    KisResourceItemChooser *m_chooser {0};
-    KisPresetDelegate* m_delegate {0};
+    KisResourceItemChooser *m_chooser {nullptr};
+    KisPresetDelegate* m_delegate {nullptr};
     ViewMode m_mode;
-
-    class PaintOpFilterModel;
-    QPointer<PaintOpFilterModel> m_paintOpFilterModel;
-
-    KisSignalAutoConnectionsStore m_currentPresetConnections;
 };
 
 #endif
-

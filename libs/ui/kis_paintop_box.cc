@@ -82,6 +82,7 @@
 #include "KisMainWindow.h"
 #include "tool/kis_smoothing_options.h"
 #include "KisPaintOpPresetSessionStorage.h"
+#include "widgets/KisBrushStrokePreviewCache.h"
 
 
 KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const char *name)
@@ -282,7 +283,7 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
         slOpacity->setSuffix(i18n("%"));
         slOpacity->setMinimumWidth(qMax(sliderWidth, slOpacity->sizeHint().width()));
         slOpacity->setFixedHeight(buttonsize);
-        slOpacity->setBlockUpdateSignalOnDrag(true);
+        slOpacity->setBlockUpdateSignalOnDrag(false);
 
         slFlow->setRange(0, 100, 0);
         slFlow->setValue(100);
@@ -290,7 +291,7 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
         slFlow->setSuffix(i18n("%"));
         slFlow->setMinimumWidth(qMax(sliderWidth, slFlow->sizeHint().width()));
         slFlow->setFixedHeight(buttonsize);
-        slFlow->setBlockUpdateSignalOnDrag(true);
+        slFlow->setBlockUpdateSignalOnDrag(false);
 
         slSize->setRange(0.01, KisImageConfig(true).maxBrushSize(), 2);
         slSize->setValue(100);
@@ -300,7 +301,7 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
         slSize->setSuffix(i18n(" px"));
         slSize->setMinimumWidth(qMax(sliderWidth, slSize->sizeHint().width()));
         slSize->setFixedHeight(buttonsize);
-        slSize->setBlockUpdateSignalOnDrag(true);
+        slSize->setBlockUpdateSignalOnDrag(false);
 
         slRotation->setFlipOptionsMode(KisAngleSelector::FlipOptionsMode_MenuButton);
         slRotation->setRange(-360.0, 360.0);
@@ -317,7 +318,7 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
         slPatternSize->setSuffix(i18n("x"));
         slPatternSize->setMinimumWidth(qMax(sliderWidth, slPatternSize->sizeHint().width()));
         slPatternSize->setFixedHeight(buttonsize);
-        slPatternSize->setBlockUpdateSignalOnDrag(true);
+        slPatternSize->setBlockUpdateSignalOnDrag(false);
         // Smoothing slider: 0% = No Smoothing, 1-100% = Stabilizer with sample count 3-100
         slSmoothing->setRange(0, 100, 0);
         slSmoothing->setValue(0);
@@ -325,7 +326,7 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
         slSmoothing->setSuffix(i18n("%"));
         slSmoothing->setMinimumWidth(qMax(sliderWidth, slSmoothing->sizeHint().width()));
         slSmoothing->setFixedHeight(buttonsize);
-        slSmoothing->setBlockUpdateSignalOnDrag(true);
+        slSmoothing->setBlockUpdateSignalOnDrag(false);
 
         m_sliderChooser[i]->setMinimumWidth(qMax(sliderWidth, slPatternSize->sizeHint().width()));
 
@@ -1014,6 +1015,9 @@ void KisPaintopBox::slotCanvasResourceChanged(int key, const QVariant &value)
              */
             m_presetsChooserPopup->canvasResourceChanged(preset);
             m_presetsEditor->currentPresetChanged(preset);
+
+            // Update the brush stroke preview cache with the current preset
+            KisBrushStrokePreviewCache::instance()->slotSetCurrentPreset(preset);
         }
 
         if (key == KoCanvasResource::CurrentCompositeOp) {

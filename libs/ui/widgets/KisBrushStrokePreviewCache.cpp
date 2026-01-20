@@ -1,5 +1,5 @@
 /*
- *  SPDX-FileCopyrightText: 2024 Krita developers
+ *  SPDX-FileCopyrightText: 2026 Tenzin Rangdol <tenzindraws@gmail.com>
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -7,301 +7,582 @@
 #include "KisBrushStrokePreviewCache.h"
 #include "KisBrushStrokePreviewGenerator.h"
 
-#include <QDebug>
-#include <QThreadPool>
-#include <QRunnable>
+#include <QDir>
+#include <QFile>
+#include <QHash>
+#include <QList>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QPainter>
+#include <QPointer>
+#include <QRegularExpression>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QTimer>
 
+#include <klocalizedstring.h>
 #include <kis_paintop_settings.h>
+#include <KisPaintOpPresetUpdateProxy.h>
 #include <KisResourceModelProvider.h>
 #include <KisResourceTypes.h>
 #include <KisResourceModel.h>
-#include <KisGlobalResourcesInterface.h>
+#include <KoCanvasResourcesIds.h>
+#include <kis_signal_auto_connection.h>
 
-#include <KisPaintOpPresetSessionStorage.h>
+#include "KisPaintOpPresetSessionStorage.h"
 
-/**
- * @brief Runnable for background preview generation
- */
-class PreviewGenerationRunnable : public QRunnable
+namespace {
+
+/// Returns preset's resource ID, or -1 if preset is null.
+inline int validPresetId(KisPaintOpPresetSP preset)
 {
-public:
-    PreviewGenerationRunnable(KisPaintOpPresetSP preset, const QSize &size,
-                              const QString &key,
-                              KisBrushStrokePreviewCache *cache)
-        : m_size(size)
-        , m_key(key)
-        , m_cache(cache)
-    {
-        // Use cloneWithResourcesSnapshot to create a thread-safe clone.
-        // This loads all linked resources (brushes, patterns, etc.) from the database
-        // on the current (GUI) thread and embeds them in a local storage.
-        // Without this, background threads would try to access the database,
-        // which fails because QSqlDatabase connections are thread-specific.
-        m_preset = preset->cloneWithResourcesSnapshot(
-            KisGlobalResourcesInterface::instance(), nullptr, nullptr);
-
-        // Apply any session-level tweaks (opacity/flow sliders etc.) so the generated
-        // stroke preview matches what the user currently has in the brush settings.
-        // This is needed because the preset objects coming from the resource model
-        // represent on-disk state and do not include session tweaks.
-        KisPaintOpPresetSessionStorage::instance()->loadTweaks(m_preset);
-    }
-
-    void run() override
-    {
-        if (!m_preset) return;
-
-        QImage preview = KisBrushStrokePreviewGenerator::generateStrokePreview(
-            m_preset, m_size,
-            QColor(0x53, 0x53, 0x53),  // Background #535353
-            Qt::white                   // Foreground (white stroke)
-        );
-
-        // Use queued connection to safely update cache from main thread
-        QMetaObject::invokeMethod(m_cache, "onPreviewGenerated",
-                                  Qt::QueuedConnection,
-                                  Q_ARG(QString, m_key),
-                                  Q_ARG(QString, m_preset->name()),
-                                  Q_ARG(QImage, preview));
-    }
-
-private:
-    KisPaintOpPresetSP m_preset;
-    QSize m_size;
-    QString m_key;
-    KisBrushStrokePreviewCache *m_cache;
-};
-
-KisBrushStrokePreviewCache* KisBrushStrokePreviewCache::s_instance = nullptr;
-
-KisBrushStrokePreviewCache* KisBrushStrokePreviewCache::instance()
-{
-    if (!s_instance) {
-        s_instance = new KisBrushStrokePreviewCache();
-    }
-    return s_instance;
+    return preset ? preset->resourceId() : -1;
 }
+
+} // namespace
+
+struct KisBrushStrokePreviewCache::Private {
+    struct CacheEntry {
+        QImage image;
+    };
+
+    mutable QMutex mutex;
+    QHash<QString, CacheEntry> cache;
+    QHash<QString, QImage> scaledCache;
+    QList<QString> accessOrder;
+    int maxCacheSize = 500;
+    KisPaintOpPresetSP currentPreset;
+    KisSignalAutoConnectionsStore presetConnections;
+    QString currentSettingsFingerprint;
+    QString diskCachePath;
+    QScopedPointer<KisBrushStrokePreviewGenerator> generator;
+    bool pendingGenerateAll {false};
+
+    /// Remove all scaled cache entries for a base key.
+    void removeScaledVariants(const QString &baseKey)
+    {
+        QMutableHashIterator<QString, QImage> it(scaledCache);
+        const QString prefix = baseKey + QLatin1Char('_');
+        while (it.hasNext()) {
+            it.next();
+            if (it.key().startsWith(prefix)) {
+                it.remove();
+            }
+        }
+    }
+};
 
 KisBrushStrokePreviewCache::KisBrushStrokePreviewCache()
     : QObject(nullptr)
-    , m_maxCacheSize(500)  // Default: cache up to 500 previews
+    , m_d(new Private)
 {
-    // Configure dedicated thread pool with limited threads to avoid lag
-    // Use only 2 threads to keep generation smooth without blocking UI
-    m_threadPool.setMaxThreadCount(2);
+    initDiskCache();
+    m_d->generator.reset(new KisBrushStrokePreviewGenerator(this));
+
+    KisAllResourcesModel *model = KisResourceModelProvider::resourceModel(ResourceType::PaintOpPresets);
+    if (model) {
+        connect(model, SIGNAL(rowsInserted(QModelIndex,int,int)),
+                this, SLOT(slotScheduleGenerateAllPreviews()));
+        connect(model, SIGNAL(modelReset()),
+                this, SLOT(slotScheduleGenerateAllPreviews()));
+    }
+
+    // Connect to session storage signals for persistent tweaks integration.
+    // This ensures stroke previews are regenerated when user modifies brush settings.
+    KisPaintOpPresetSessionStorage *sessionStorage = KisPaintOpPresetSessionStorage::instance();
+    if (sessionStorage) {
+        connect(sessionStorage, &KisPaintOpPresetSessionStorage::sigTweaksSaved,
+                this, &KisBrushStrokePreviewCache::slotSessionTweaksSaved);
+        connect(sessionStorage, &KisPaintOpPresetSessionStorage::sigTweaksCleared,
+                this, &KisBrushStrokePreviewCache::slotSessionTweaksCleared);
+    }
 }
 
 KisBrushStrokePreviewCache::~KisBrushStrokePreviewCache()
 {
 }
 
-QString KisBrushStrokePreviewCache::generateCacheKey(const QString &presetName, const QSize &size) const
+KisBrushStrokePreviewCache* KisBrushStrokePreviewCache::instance()
 {
-    return QString("%1_%2x%3").arg(presetName).arg(size.width()).arg(size.height());
+    static KisBrushStrokePreviewCache s_instance;
+    return &s_instance;
+}
+
+bool KisBrushStrokePreviewCache::needsStripedBackground(const QString &paintOpId)
+{
+    return paintOpId == QLatin1String("colorsmudge")
+        || paintOpId == QLatin1String("deformbrush")
+        || paintOpId == QLatin1String("filter");
+}
+
+bool KisBrushStrokePreviewCache::isNoPreviewEngine(const QString &paintOpId)
+{
+    return paintOpId == QLatin1String("roundmarker")
+        || paintOpId == QLatin1String("experimentbrush")
+        || paintOpId == QLatin1String("duplicate");
+}
+
+void KisBrushStrokePreviewCache::initDiskCache()
+{
+    const QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    m_d->diskCachePath = cacheDir + QStringLiteral("/brush_stroke_previews");
+    QDir dir(m_d->diskCachePath);
+    if (!dir.exists()) {
+        dir.mkpath(QStringLiteral("."));
+    }
+}
+
+QString KisBrushStrokePreviewCache::getDiskCacheFilename(int presetId) const
+{
+    return QDir(m_d->diskCachePath).filePath(QString::number(presetId) + QStringLiteral(".png"));
+}
+
+bool KisBrushStrokePreviewCache::loadFromDiskCache(int presetId, QImage &image)
+{
+    const QString filename = getDiskCacheFilename(presetId);
+    return QFile::exists(filename) && image.load(filename);
+}
+
+void KisBrushStrokePreviewCache::saveToDiskCache(int presetId, const QImage &image)
+{
+    if (image.isNull()) {
+        return;
+    }
+
+    QSaveFile file(getDiskCacheFilename(presetId));
+    if (file.open(QIODevice::WriteOnly) && image.save(&file, "PNG", 50)) {
+        file.commit();
+    }
+}
+
+bool KisBrushStrokePreviewCache::hasDiskCache(int presetId) const
+{
+    return QFile::exists(getDiskCacheFilename(presetId));
+}
+
+void KisBrushStrokePreviewCache::removeDiskCache(int presetId)
+{
+    QFile::remove(getDiskCacheFilename(presetId));
+}
+
+QString KisBrushStrokePreviewCache::generateCacheKey(int presetId) const
+{
+    return QString::number(presetId);
+}
+
+QString KisBrushStrokePreviewCache::generateSizedCacheKey(int presetId, const QSize &size) const
+{
+    return QStringLiteral("%1_%2x%3").arg(presetId).arg(size.width()).arg(size.height());
 }
 
 void KisBrushStrokePreviewCache::evictIfNeeded()
 {
-    // Remove oldest entries until we're under the limit
-    while (m_cache.size() >= m_maxCacheSize && !m_accessOrder.isEmpty()) {
-        QString oldestKey = m_accessOrder.takeFirst();
-        m_cache.remove(oldestKey);
+    while (m_d->cache.size() >= m_d->maxCacheSize && !m_d->accessOrder.isEmpty()) {
+        const QString oldestKey = m_d->accessOrder.takeFirst();
+        m_d->cache.remove(oldestKey);
+        m_d->removeScaledVariants(oldestKey);
     }
 }
 
 void KisBrushStrokePreviewCache::updateAccessOrder(const QString &key)
 {
-    // Move key to end of access order (most recently used)
-    m_accessOrder.removeAll(key);
-    m_accessOrder.append(key);
+    m_d->accessOrder.removeAll(key);
+    m_d->accessOrder.append(key);
 }
 
 QImage KisBrushStrokePreviewCache::getPreview(KisPaintOpPresetSP preset, const QSize &size)
 {
-    if (!preset || size.isEmpty()) {
-        return QImage();
+    const int presetId = validPresetId(preset);
+    if (presetId < 0 || size.isEmpty()) {
+        return size.isEmpty() ? QImage() : generatePlaceholder(size);
     }
 
-    QMutexLocker locker(&m_mutex);
-
-    const QString key = generateCacheKey(preset->name(), size);
-
-    // Check if we have a cached entry
-    if (m_cache.contains(key)) {
-        updateAccessOrder(key);
-        return m_cache[key].image;
+    // Return "No Preview" placeholder for unsupported brush engines
+    if (preset && isNoPreviewEngine(preset->paintOp().id())) {
+        return generateNoPreviewPlaceholder(size);
     }
 
-    // Check if generation is already pending
-    if (m_pendingGenerations.contains(key)) {
-        // Return placeholder while waiting
-        return generatePlaceholder(size);
+    QMutexLocker locker(&m_d->mutex);
+
+    const QString baseKey = generateCacheKey(presetId);
+    const QString sizedKey = generateSizedCacheKey(presetId, size);
+
+    // Check scaled cache first.
+    auto scaledIt = m_d->scaledCache.find(sizedKey);
+    if (scaledIt != m_d->scaledCache.end()) {
+        updateAccessOrder(baseKey);
+        return scaledIt.value();
     }
 
-    // Schedule background generation
-    scheduleGeneration(preset, size, key);
+    // Check base cache.
+    auto it = m_d->cache.find(baseKey);
+    if (it != m_d->cache.end() && !it->image.isNull()) {
+        updateAccessOrder(baseKey);
+        QImage scaled = scalePreviewToSize(it->image, size);
+        m_d->scaledCache.insert(sizedKey, scaled);
+        return scaled;
+    }
 
-    // Return placeholder immediately (non-blocking)
+    // Try disk cache.
+    QImage diskImage;
+    if (loadFromDiskCache(presetId, diskImage) && !diskImage.isNull()) {
+        evictIfNeeded();
+        m_d->cache.insert(baseKey, {diskImage});
+        m_d->accessOrder.append(baseKey);
+        QImage scaled = scalePreviewToSize(diskImage, size);
+        m_d->scaledCache.insert(sizedKey, scaled);
+        return scaled;
+    }
+
     return generatePlaceholder(size);
+}
+
+QImage KisBrushStrokePreviewCache::scalePreviewToSize(const QImage &source, const QSize &targetSize) const
+{
+    if (source.isNull() || targetSize.isEmpty()) {
+        return source;
+    }
+
+    // Center-crop to fill target.
+    const qreal sourceAspect = static_cast<qreal>(source.width()) / source.height();
+    const qreal targetAspect = static_cast<qreal>(targetSize.width()) / targetSize.height();
+
+    QImage scaled;
+    if (sourceAspect > targetAspect) {
+        int scaledHeight = targetSize.height();
+        int scaledWidth = static_cast<int>(scaledHeight * sourceAspect);
+        scaled = source.scaled(scaledWidth, scaledHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        int xOffset = (scaled.width() - targetSize.width()) / 2;
+        scaled = scaled.copy(xOffset, 0, targetSize.width(), targetSize.height());
+    } else {
+        int scaledWidth = targetSize.width();
+        int scaledHeight = static_cast<int>(scaledWidth / sourceAspect);
+        scaled = source.scaled(scaledWidth, scaledHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        int yOffset = (scaled.height() - targetSize.height()) / 2;
+        scaled = scaled.copy(0, yOffset, targetSize.width(), targetSize.height());
+    }
+
+    return scaled;
 }
 
 QImage KisBrushStrokePreviewCache::generatePlaceholder(const QSize &size) const
 {
     QImage placeholder(size, QImage::Format_ARGB32_Premultiplied);
-    placeholder.fill(QColor(0x53, 0x53, 0x53));  // #535353
+    placeholder.fill(Qt::transparent);
 
     QPainter painter(&placeholder);
-    painter.setPen(QColor(0xFF, 0xFF, 0xFF));  // Bright white brush name
+    painter.setPen(Qt::white);
     QFont font;
-    font.setPixelSize(qMin(size.height() / 4, 10));
+    font.setPixelSize(qMin(size.height() / 2, 10));
     painter.setFont(font);
-    painter.drawText(placeholder.rect(), Qt::AlignCenter, "...");
-    painter.end();
+    painter.drawText(placeholder.rect(), Qt::AlignCenter, i18n("Loading..."));
 
     return placeholder;
 }
 
-void KisBrushStrokePreviewCache::scheduleGeneration(KisPaintOpPresetSP preset, const QSize &size,
-                                                     const QString &key)
+QImage KisBrushStrokePreviewCache::generateNoPreviewPlaceholder(const QSize &size) const
 {
-    // Limit concurrent pending generations to avoid overwhelming the system
-    const int maxPendingGenerations = 50;
-    if (m_pendingGenerations.size() >= maxPendingGenerations) {
-        // Too many pending, skip this one for now (will be retried on next paint)
+    QImage placeholder(size, QImage::Format_ARGB32_Premultiplied);
+    placeholder.fill(Qt::transparent);
+
+    QPainter painter(&placeholder);
+    painter.setPen(Qt::white);
+    QFont font;
+    font.setPixelSize(qMin(size.height() / 2, 10));
+    painter.setFont(font);
+    painter.drawText(placeholder.rect(), Qt::AlignCenter, i18n("No Preview"));
+
+    return placeholder;
+}
+
+void KisBrushStrokePreviewCache::slotLivePreviewImageReady(int presetId, const QImage &previewImage)
+{
+    if (presetId < 0 || previewImage.isNull()) {
         return;
     }
 
-    // Mark as pending
-    m_pendingGenerations.insert(key);
+    saveToDiskCache(presetId, previewImage);
 
-    // Create and queue the runnable
-    PreviewGenerationRunnable *runnable = new PreviewGenerationRunnable(
-        preset, size, key, this);
-    runnable->setAutoDelete(true);
-
-    // Use dedicated thread pool with limited threads to avoid system lag
-    m_threadPool.start(runnable, QThread::LowPriority);
-}
-
-void KisBrushStrokePreviewCache::onPreviewGenerated(const QString &key, const QString &presetName,
-                                                     const QImage &preview)
-{
     {
-        QMutexLocker locker(&m_mutex);
+        QMutexLocker locker(&m_d->mutex);
 
-        // Remove from pending
-        m_pendingGenerations.remove(key);
+        const QString baseKey = generateCacheKey(presetId);
 
-        // Store in cache if not already there
-        if (!m_cache.contains(key)) {
+        auto it = m_d->cache.find(baseKey);
+        if (it != m_d->cache.end()) {
+            it->image = previewImage;
+            updateAccessOrder(baseKey);
+        } else {
             evictIfNeeded();
-
-            CacheEntry entry;
-            entry.image = preview;
-
-            m_cache.insert(key, entry);
-            m_accessOrder.append(key);
+            m_d->cache.insert(baseKey, {previewImage});
+            m_d->accessOrder.append(baseKey);
         }
+
+        m_d->removeScaledVariants(baseKey);
     }
 
-    // Notify that preview is ready (triggers view update)
-    emit previewReady(presetName);
+    Q_EMIT sigPreviewReady(presetId);
 }
 
-void KisBrushStrokePreviewCache::invalidatePreset(const QString &presetName)
+void KisBrushStrokePreviewCache::invalidatePreset(int presetId)
 {
-    QMutexLocker locker(&m_mutex);
-
-    // Remove all entries for this preset (at any size)
-    QList<QString> keysToRemove;
-    for (auto it = m_cache.constBegin(); it != m_cache.constEnd(); ++it) {
-        if (it.key().startsWith(presetName + "_")) {
-            keysToRemove.append(it.key());
-        }
-    }
-
-    for (const QString &key : keysToRemove) {
-        m_cache.remove(key);
-        m_accessOrder.removeAll(key);
-    }
-}
-
-void KisBrushStrokePreviewCache::clearCache()
-{
-    QMutexLocker locker(&m_mutex);
-    m_cache.clear();
-    m_accessOrder.clear();
-}
-
-void KisBrushStrokePreviewCache::setMaxCacheSize(int size)
-{
-    QMutexLocker locker(&m_mutex);
-    m_maxCacheSize = qMax(1, size);
-
-    // Evict if we're now over the limit
-    while (m_cache.size() > m_maxCacheSize && !m_accessOrder.isEmpty()) {
-        QString oldestKey = m_accessOrder.takeFirst();
-        m_cache.remove(oldestKey);
-    }
-}
-
-int KisBrushStrokePreviewCache::cacheSize() const
-{
-    QMutexLocker locker(&m_mutex);
-    return m_cache.size();
-}
-
-bool KisBrushStrokePreviewCache::isCached(KisPaintOpPresetSP preset, const QSize &size) const
-{
-    if (!preset || size.isEmpty()) {
-        return false;
-    }
-
-    QMutexLocker locker(&m_mutex);
-
-    const QString key = generateCacheKey(preset->name(), size);
-    return m_cache.contains(key);
-}
-
-void KisBrushStrokePreviewCache::preGenerateAllPreviews(const QSize &size)
-{
-    if (size.isEmpty()) {
+    if (presetId < 0) {
         return;
     }
 
-    // Check if we've already pre-generated for this size
-    const QString sizeKey = QString("%1x%2").arg(size.width()).arg(size.height());
-    {
-        QMutexLocker locker(&m_mutex);
-        if (m_preGeneratedSizes.contains(sizeKey)) {
-            // Already pre-generated for this size, skip
-            return;
-        }
-        // Mark as pre-generated to prevent duplicate runs
-        m_preGeneratedSizes.insert(sizeKey);
-    }
+    removeDiskCache(presetId);
 
-    // Get all brush presets from the resource model
+    QMutexLocker locker(&m_d->mutex);
+
+    const QString baseKey = generateCacheKey(presetId);
+
+    m_d->removeScaledVariants(baseKey);
+}
+
+void KisBrushStrokePreviewCache::invalidatePresetByName(const QString &presetName)
+{
+    int presetId = findPresetIdByName(presetName);
+    if (presetId >= 0) {
+        invalidatePreset(presetId);
+    }
+}
+
+int KisBrushStrokePreviewCache::findPresetIdByName(const QString &presetName) const
+{
     KisAllResourcesModel *model = KisResourceModelProvider::resourceModel(ResourceType::PaintOpPresets);
     if (!model) {
-        return;
+        return -1;
     }
 
     const int rowCount = model->rowCount();
     for (int i = 0; i < rowCount; ++i) {
         QModelIndex idx = model->index(i, 0);
-        KoResourceSP resource = model->resourceForIndex(idx);
-        KisPaintOpPresetSP preset = resource.dynamicCast<KisPaintOpPreset>();
-
-        if (preset) {
-            const QString key = generateCacheKey(preset->name(), size);
-
-            QMutexLocker locker(&m_mutex);
-            // Only schedule if not already cached and not already pending
-            if (!m_cache.contains(key) && !m_pendingGenerations.contains(key)) {
-                scheduleGeneration(preset, size, key);
+        QString name = idx.data(Qt::UserRole + KisAbstractResourceModel::Name).toString();
+        if (name == presetName) {
+            KisPaintOpPresetSP preset = model->resourceForIndex(idx).dynamicCast<KisPaintOpPreset>();
+            if (preset) {
+                return preset->resourceId();
             }
         }
     }
+    return -1;
+}
+
+void KisBrushStrokePreviewCache::generateAllPreviews()
+{
+    KisAllResourcesModel *model = KisResourceModelProvider::resourceModel(ResourceType::PaintOpPresets);
+    if (!model) {
+        return;
+    }
+
+    QList<KisPaintOpPresetSP> missing;
+    const int rowCount = model->rowCount();
+
+    for (int i = 0; i < rowCount; ++i) {
+        QModelIndex idx = model->index(i, 0);
+        KisPaintOpPresetSP preset = model->resourceForIndex(idx).dynamicCast<KisPaintOpPreset>();
+
+        const int presetId = validPresetId(preset);
+        if (presetId < 0) {
+            continue;
+        }
+
+        const QString baseKey = generateCacheKey(presetId);
+        bool cached;
+        {
+            QMutexLocker locker(&m_d->mutex);
+            cached = m_d->cache.contains(baseKey);
+        }
+
+        if (!cached && !hasDiskCache(presetId)) {
+            missing.append(preset);
+        }
+    }
+
+    if (!missing.isEmpty() && m_d->generator) {
+        m_d->generator->startBatch(missing);
+    }
+}
+
+void KisBrushStrokePreviewCache::slotScheduleGenerateAllPreviews()
+{
+    if (m_d->pendingGenerateAll) {
+        return;
+    }
+
+    m_d->pendingGenerateAll = true;
+    QTimer::singleShot(0, this, SLOT(slotRunGenerateAllPreviews()));
+}
+
+void KisBrushStrokePreviewCache::slotRunGenerateAllPreviews()
+{
+    m_d->pendingGenerateAll = false;
+    generateAllPreviews();
+}
+
+void KisBrushStrokePreviewCache::registerLivePreviewView(KisPresetLivePreviewView *view)
+{
+    if (m_d->generator) {
+        m_d->generator->setSourceView(view);
+    }
+}
+
+void KisBrushStrokePreviewCache::slotPresetSettingsChanged(KisPaintOpPresetSP preset)
+{
+    const int presetId = validPresetId(preset);
+    if (presetId < 0) {
+        return;
+    }
+
+    invalidatePreset(presetId);
+
+    if (m_d->generator) {
+        m_d->generator->requestPreview(preset);
+    }
+
+    Q_EMIT sigPreviewReady(presetId);
+}
+
+void KisBrushStrokePreviewCache::slotSetCurrentPreset(KisPaintOpPresetSP preset)
+{
+    m_d->presetConnections.clear();
+    m_d->currentPreset = preset;
+    m_d->currentSettingsFingerprint.clear();
+
+    if (!preset) {
+        return;
+    }
+
+    m_d->currentSettingsFingerprint = generateSettingsFingerprint(preset);
+
+    QPointer<KisPaintOpPresetUpdateProxy> proxy = preset->updateProxy();
+    if (proxy) {
+        m_d->presetConnections.addConnection(
+            proxy, SIGNAL(sigSettingsChanged()),
+            this, SLOT(slotCurrentPresetSettingsChanged()));
+    }
+}
+
+void KisBrushStrokePreviewCache::slotCurrentPresetSettingsChanged()
+{
+    if (!m_d->currentPreset) {
+        return;
+    }
+
+    const QString newFingerprint = generateSettingsFingerprint(m_d->currentPreset);
+    if (newFingerprint == m_d->currentSettingsFingerprint) {
+        return;
+    }
+
+    m_d->currentSettingsFingerprint = newFingerprint;
+    slotPresetSettingsChanged(m_d->currentPreset);
+}
+
+void KisBrushStrokePreviewCache::slotCanvasResourceChanged(int key, const QVariant &value)
+{
+    Q_UNUSED(value);
+
+    if (!m_d->currentPreset) {
+        return;
+    }
+
+    const bool affectsBrush = key == KoCanvasResource::Size
+        || key == KoCanvasResource::Opacity
+        || key == KoCanvasResource::Flow
+        || key == KoCanvasResource::BrushRotation;
+
+    if (!affectsBrush) {
+        return;
+    }
+
+    const int presetId = m_d->currentPreset->resourceId();
+    invalidatePreset(presetId);
+
+    if (m_d->generator) {
+        m_d->generator->requestPreview(m_d->currentPreset);
+    }
+
+    if (presetId >= 0) {
+        Q_EMIT sigPreviewReady(presetId);
+    }
+}
+
+void KisBrushStrokePreviewCache::slotSessionTweaksSaved(const QString &presetName)
+{
+    // When user saves tweaks via session storage, invalidate the cache
+    // and regenerate the preview to reflect the new settings.
+    int presetId = findPresetIdByName(presetName);
+    if (presetId >= 0) {
+        invalidatePreset(presetId);
+
+        // Find the preset and request a new preview
+        KisAllResourcesModel *model = KisResourceModelProvider::resourceModel(ResourceType::PaintOpPresets);
+        if (model) {
+            const int rowCount = model->rowCount();
+            for (int i = 0; i < rowCount; ++i) {
+                QModelIndex idx = model->index(i, 0);
+                KisPaintOpPresetSP preset = model->resourceForIndex(idx).dynamicCast<KisPaintOpPreset>();
+                if (preset && preset->resourceId() == presetId) {
+                    if (m_d->generator) {
+                        m_d->generator->requestPreview(preset);
+                    }
+                    break;
+                }
+            }
+        }
+
+        Q_EMIT sigPreviewReady(presetId);
+    }
+}
+
+void KisBrushStrokePreviewCache::slotSessionTweaksCleared(const QString &presetName)
+{
+    // When user clears tweaks (reloads preset to defaults), invalidate the cache
+    // and regenerate the preview to reflect the original settings.
+    int presetId = findPresetIdByName(presetName);
+    if (presetId >= 0) {
+        invalidatePreset(presetId);
+
+        // Find the preset and request a new preview
+        KisAllResourcesModel *model = KisResourceModelProvider::resourceModel(ResourceType::PaintOpPresets);
+        if (model) {
+            const int rowCount = model->rowCount();
+            for (int i = 0; i < rowCount; ++i) {
+                QModelIndex idx = model->index(i, 0);
+                KisPaintOpPresetSP preset = model->resourceForIndex(idx).dynamicCast<KisPaintOpPreset>();
+                if (preset && preset->resourceId() == presetId) {
+                    if (m_d->generator) {
+                        m_d->generator->requestPreview(preset);
+                    }
+                    break;
+                }
+            }
+        }
+
+        Q_EMIT sigPreviewReady(presetId);
+    }
+}
+
+QString KisBrushStrokePreviewCache::generateSettingsFingerprint(KisPaintOpPresetSP preset) const
+{
+    if (!preset || !preset->settings()) {
+        return QString();
+    }
+
+    QString xml = preset->settings()->toXML();
+
+    // Strip stroke-time params that vary per-stroke.
+    static const QStringList strokeTimeProperties = {
+        QStringLiteral("Texture/Pattern/OffsetX"),
+        QStringLiteral("Texture/Pattern/OffsetY")
+    };
+
+    Q_FOREACH (const QString &propName, strokeTimeProperties) {
+        QRegularExpression re(
+            QStringLiteral("<param name=\"%1\"[^>]*>[^<]*</param>\\s*")
+                .arg(QRegularExpression::escape(propName)));
+        xml.remove(re);
+    }
+
+    return xml;
 }
