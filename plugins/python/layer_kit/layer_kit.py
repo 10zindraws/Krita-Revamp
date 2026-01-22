@@ -800,10 +800,25 @@ class LayersDockerPatcher(QObject):
         self._original_lower: Optional[QToolButton] = None
 
     def apply(self) -> None:
+        # UI cleanup: hide built-in controls the user doesn't want.
+        self._hide_builtin_buttons()
         self._add_group_button()
         self._add_clipping_mask_button()
         self._patch_move_buttons()
         self._install_group_layer_labeling()
+
+    def _hide_builtin_buttons(self) -> None:
+        """Hide unwanted built-in buttons in the Layers docker bottom bar."""
+
+        # Buttons from Krita's WdgLayerBox.ui bottom bar (hbox1)
+        # hbox1: bnAdd, bnDuplicate, bnLower, bnRaise, bnProperties, spacer, bnDelete
+        for obj_name in ("bnDuplicate", "bnProperties"):
+            btn = self.docker.findChild(QToolButton, obj_name)
+            if btn is None:
+                continue
+            # Hide and disable so it can't be focused/triggered.
+            btn.hide()
+            btn.setEnabled(False)
 
     def _add_group_button(self) -> None:
         """Add the 'Add Group Layer' button to the right of bnAdd in hbox1 (bottom bar)."""
