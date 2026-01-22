@@ -100,11 +100,12 @@ public:
     void moveResource(int resourceId, int newPosition);
 
     /**
-     * @brief moveResources Move multiple resources to a new position
+     * @brief moveResources Move multiple resources relative to a target item
      * @param resourceIds Resources to move (in order)
-     * @param targetPosition Target position for first resource
+     * @param targetItemId Resource ID of the item to insert relative to (-1 for append)
+     * @param insertAfter True to insert after targetItemId, false to insert before
      */
-    void moveResources(const QList<int> &resourceIds, int targetPosition);
+    void moveResources(const QList<int> &resourceIds, int targetItemId, bool insertAfter);
 
     /**
      * @brief initializeOrderForCurrentTag Initialize the custom order for the current tag

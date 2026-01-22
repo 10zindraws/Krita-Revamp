@@ -85,9 +85,10 @@ Q_SIGNALS:
     /**
      * @brief resourcesReordered Emitted when resources have been reordered via drag-drop
      * @param resourceIds The resource IDs that were moved
-     * @param targetPosition The new position (row index)
+     * @param targetItemId The resource ID of the item we're dropping onto (-1 for end)
+     * @param insertAfter True to insert after targetItemId, false to insert before
      */
-    void resourcesReordered(const QList<int> &resourceIds, int targetPosition);
+    void resourcesReordered(const QList<int> &resourceIds, int targetItemId, bool insertAfter);
 
 protected Q_SLOTS:
     void rowsAboutToBeRemoved(const QModelIndex &parent, int start, int end) override;
@@ -116,11 +117,18 @@ private Q_SLOTS:
 private:
     void resizeEvent(QResizeEvent *event) override;
 
+    enum DropZone {
+        DropNone,      // No-op zone (middle)
+        DropBefore,    // Left/top edge zone
+        DropAfter      // Right/bottom edge zone
+    };
+
     void startDrag();
     void stopDrag();
     int calculateDropPosition(const QPoint &pos) const;
-    bool isLeftHalf(const QPoint &pos, const QModelIndex &index) const;
-    void drawDropIndicator(QPainter *painter, const QModelIndex &index, bool leftSide);
+    DropZone getDropZone(const QPoint &pos, const QModelIndex &index) const;
+    bool isSingleColumnLayout() const;
+    void drawDropIndicator(QPainter *painter, const QModelIndex &index, DropZone zone);
 
 private:
     struct Private;

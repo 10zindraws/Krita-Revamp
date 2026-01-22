@@ -46,7 +46,8 @@ struct Q_DECL_HIDDEN KisResourceItemListView::Private
     QPoint dragStartPosition;
     QModelIndex dragStartIndex;
     QModelIndex dropTargetIndex;
-    bool dropOnLeftSide {false};
+    KisResourceItemListView::DropZone dropZone {KisResourceItemListView::DropNone};
+    QList<int> draggedResourceIds;       // Track IDs of items being dragged
     QTimer *dragHighlightTimer {nullptr};
 };
 
@@ -386,6 +387,9 @@ void KisResourceItemListView::startDrag()
         return;
     }
 
+    // Store dragged resource IDs for no-op detection
+    m_d->draggedResourceIds = resourceIds;
+
     // Create mime data
     QMimeData *mimeData = new QMimeData();
     QStringList idStrings;
@@ -418,6 +422,8 @@ void KisResourceItemListView::stopDrag()
     m_d->clickedOnSelected = false;
     m_d->dragHighlightTimer->stop();
     m_d->dropTargetIndex = QModelIndex();
+    m_d->dropZone = DropNone;
+    m_d->draggedResourceIds.clear();
     viewport()->update();
 }
 
@@ -452,11 +458,21 @@ void KisResourceItemListView::dragMoveEvent(QDragMoveEvent *event)
     // Update drop target for visual feedback
     QModelIndex idx = indexAt(event->pos());
     if (idx.isValid()) {
-        m_d->dropTargetIndex = idx;
-        m_d->dropOnLeftSide = isLeftHalf(event->pos(), idx);
+        DropZone zone = getDropZone(event->pos(), idx);
+
+        // Only update drop target if we're in an active zone (not no-op)
+        if (zone != DropNone) {
+            m_d->dropTargetIndex = idx;
+            m_d->dropZone = zone;
+        } else {
+            // In no-op zone - clear drop target (no visual feedback)
+            m_d->dropTargetIndex = QModelIndex();
+            m_d->dropZone = DropNone;
+        }
     } else {
         // Dropped on empty area - append to end
         m_d->dropTargetIndex = QModelIndex();
+        m_d->dropZone = DropNone;
     }
 
     viewport()->update();
@@ -496,17 +512,39 @@ void KisResourceItemListView::dropEvent(QDropEvent *event)
     }
 
     if (resourceIds.isEmpty()) {
+        m_d->dropTargetIndex = QModelIndex();
+        viewport()->update();
         return;
     }
 
-    // Calculate drop position
-    int targetPosition = calculateDropPosition(event->pos());
+    // Get the target item and drop zone
+    QModelIndex targetIdx = indexAt(event->pos());
+    DropZone zone = targetIdx.isValid() ? getDropZone(event->pos(), targetIdx) : DropNone;
 
-    // Emit signal for the chooser to handle the reorder
-    Q_EMIT resourcesReordered(resourceIds, targetPosition);
+    // If in no-op zone, do nothing
+    if (zone == DropNone && targetIdx.isValid()) {
+        m_d->dropTargetIndex = QModelIndex();
+        m_d->dropZone = DropNone;
+        viewport()->update();
+        return;
+    }
+
+    // Get the target item's resource ID
+    int targetItemId = -1;
+    bool insertAfter = false;
+
+    if (targetIdx.isValid()) {
+        targetItemId = targetIdx.data(Qt::UserRole + KisAbstractResourceModel::Id).toInt();
+        insertAfter = (zone == DropAfter);
+    }
+    // If targetIdx is invalid (dropped on empty area), targetItemId = -1 means append to end
+
+    // Emit signal with target item ID and insert position
+    Q_EMIT resourcesReordered(resourceIds, targetItemId, insertAfter);
 
     // Clear drop target
     m_d->dropTargetIndex = QModelIndex();
+    m_d->dropZone = DropNone;
     viewport()->update();
 }
 
@@ -518,45 +556,122 @@ int KisResourceItemListView::calculateDropPosition(const QPoint &pos) const
         return model() ? model()->rowCount() : 0;
     }
 
+    DropZone zone = getDropZone(pos, idx);
+
+    // No-op zone - return -1 to signal no action
+    if (zone == DropNone) {
+        return -1;
+    }
+
     int row = idx.row();
-    if (!isLeftHalf(pos, idx)) {
-        // Drop on right/bottom side means insert after this item
+    if (zone == DropAfter) {
+        // Drop on right/bottom edge means insert after this item
         row++;
     }
+    // zone == DropBefore means insert at current row (before this item)
+
     return row;
 }
 
-bool KisResourceItemListView::isLeftHalf(const QPoint &pos, const QModelIndex &index) const
+bool KisResourceItemListView::isSingleColumnLayout() const
 {
-    QRect rect = visualRect(index);
-    if (!rect.isValid()) return true;
-
-    // In Detail mode (list view), use top/bottom split instead of left/right
-    if (m_d->viewMode == ListViewMode::Detail) {
-        // 50/50 split vertically
-        int midY = rect.top() + rect.height() / 2;
-        return pos.y() < midY;
+    if (!model() || model()->rowCount() == 0) {
+        return false;
     }
 
-    // For icon modes, use left/right split
-    // 50/50 split horizontally
-    int midX = rect.left() + rect.width() / 2;
-    return pos.x() < midX;
+    // Detail mode is always single column
+    if (m_d->viewMode == ListViewMode::Detail) {
+        return true;
+    }
+
+    // For IconGrid/Strip modes, check if items are arranged in a single column
+    // by comparing X coordinates of first few visible items
+    QModelIndex firstIdx = indexAt(viewport()->rect().topLeft());
+    if (!firstIdx.isValid()) {
+        firstIdx = model()->index(0, 0);
+    }
+
+    if (!firstIdx.isValid()) {
+        return false;
+    }
+
+    QRect firstRect = visualRect(firstIdx);
+    int referenceX = firstRect.left();
+    int tolerance = firstRect.width() / 4; // 25% tolerance for alignment
+
+    // Check next few items to see if they're in the same column
+    int itemsToCheck = qMin(5, model()->rowCount());
+    int matchingColumn = 0;
+
+    for (int i = 0; i < itemsToCheck; i++) {
+        QModelIndex idx = model()->index(firstIdx.row() + i, 0);
+        if (!idx.isValid()) break;
+
+        QRect rect = visualRect(idx);
+        if (qAbs(rect.left() - referenceX) <= tolerance) {
+            matchingColumn++;
+        }
+    }
+
+    // If most items share the same X coordinate, it's a single column
+    return matchingColumn >= itemsToCheck - 1;
+}
+
+KisResourceItemListView::DropZone KisResourceItemListView::getDropZone(const QPoint &pos, const QModelIndex &index) const
+{
+    QRect rect = visualRect(index);
+    if (!rect.isValid()) return DropNone;
+
+    // Edge zone threshold: 30% from each edge
+    const double edgeThreshold = 0.30;
+
+    // Determine if we should use vertical (top/bottom) or horizontal (left/right) logic
+    bool useSingleColumnLogic = isSingleColumnLayout();
+
+    if (useSingleColumnLogic) {
+        // Single column: use top/bottom edges
+        int height = rect.height();
+        int topEdgeEnd = rect.top() + static_cast<int>(height * edgeThreshold);
+        int bottomEdgeStart = rect.bottom() - static_cast<int>(height * edgeThreshold);
+
+        if (pos.y() <= topEdgeEnd) {
+            return DropBefore; // Top edge
+        } else if (pos.y() >= bottomEdgeStart) {
+            return DropAfter; // Bottom edge
+        } else {
+            return DropNone; // Middle no-op zone
+        }
+    } else {
+        // Multi-column: use left/right edges
+        int width = rect.width();
+        int leftEdgeEnd = rect.left() + static_cast<int>(width * edgeThreshold);
+        int rightEdgeStart = rect.right() - static_cast<int>(width * edgeThreshold);
+
+        if (pos.x() <= leftEdgeEnd) {
+            return DropBefore; // Left edge
+        } else if (pos.x() >= rightEdgeStart) {
+            return DropAfter; // Right edge
+        } else {
+            return DropNone; // Middle no-op zone
+        }
+    }
 }
 
 void KisResourceItemListView::paintEvent(QPaintEvent *event)
 {
     QListView::paintEvent(event);
 
-    // Draw drop indicator if we have a valid drop target
-    if (m_d->dropTargetIndex.isValid() && m_d->isDragging) {
+    // Draw drop indicator if we have a valid drop target and not in no-op zone
+    if (m_d->dropTargetIndex.isValid() && m_d->isDragging && m_d->dropZone != DropNone) {
         QPainter painter(viewport());
-        drawDropIndicator(&painter, m_d->dropTargetIndex, m_d->dropOnLeftSide);
+        drawDropIndicator(&painter, m_d->dropTargetIndex, m_d->dropZone);
     }
 }
 
-void KisResourceItemListView::drawDropIndicator(QPainter *painter, const QModelIndex &index, bool leftSide)
+void KisResourceItemListView::drawDropIndicator(QPainter *painter, const QModelIndex &index, DropZone zone)
 {
+    if (zone == DropNone) return; // Don't draw indicator for no-op zone
+
     QRect rect = visualRect(index);
     if (!rect.isValid()) return;
 
@@ -564,17 +679,20 @@ void KisResourceItemListView::drawDropIndicator(QPainter *painter, const QModelI
     painter->setRenderHint(QPainter::Antialiasing, true);
 
     QPen pen(HIGHLIGHT_COLOR);
-    pen.setWidth(leftSide ? LEFT_EDGE_WIDTH : RIGHT_EDGE_WIDTH);
+    pen.setWidth(zone == DropBefore ? LEFT_EDGE_WIDTH : RIGHT_EDGE_WIDTH);
     painter->setPen(pen);
     painter->setBrush(Qt::NoBrush);
 
-    // In Detail mode (list view), draw horizontal lines (top/bottom)
-    if (m_d->viewMode == ListViewMode::Detail) {
-        int y = leftSide ? rect.top() + LEFT_EDGE_WIDTH / 2 : rect.bottom() - RIGHT_EDGE_WIDTH / 2;
+    // Determine if we should draw horizontal (top/bottom) or vertical (left/right) lines
+    bool useSingleColumnLogic = isSingleColumnLayout();
+
+    if (useSingleColumnLogic) {
+        // Single column: draw horizontal lines (top/bottom)
+        int y = (zone == DropBefore) ? rect.top() + LEFT_EDGE_WIDTH / 2 : rect.bottom() - RIGHT_EDGE_WIDTH / 2;
         painter->drawLine(rect.left(), y, rect.right(), y);
     } else {
-        // For icon modes, draw vertical lines (left/right)
-        int x = leftSide ? rect.left() + LEFT_EDGE_WIDTH / 2 : rect.right() - RIGHT_EDGE_WIDTH / 2;
+        // Multi-column: draw vertical lines (left/right)
+        int x = (zone == DropBefore) ? rect.left() + LEFT_EDGE_WIDTH / 2 : rect.right() - RIGHT_EDGE_WIDTH / 2;
         painter->drawLine(x, rect.top(), x, rect.bottom());
     }
 

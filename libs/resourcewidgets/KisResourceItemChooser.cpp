@@ -911,10 +911,10 @@ void KisResourceItemChooser::updateView()
     d->tagManager->tagChooserWidget()->updateIcons();
 }
 
-void KisResourceItemChooser::slotResourcesReordered(const QList<int> &resourceIds, int targetPosition)
+void KisResourceItemChooser::slotResourcesReordered(const QList<int> &resourceIds, int targetItemId, bool insertAfter)
 {
     // Forward the reorder request to the proxy model
     if (d->resourceType == ResourceType::PaintOpPresets) {
-        d->tagFilterProxyModel->moveResources(resourceIds, targetPosition);
+        d->tagFilterProxyModel->moveResources(resourceIds, targetItemId, insertAfter);
     }
 }

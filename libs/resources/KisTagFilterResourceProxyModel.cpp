@@ -438,14 +438,39 @@ void KisTagFilterResourceProxyModel::moveResource(int resourceId, int newPositio
     KisPresetOrderManager::instance()->moveResource(tagUrl, resourceId, newPosition);
 }
 
-void KisTagFilterResourceProxyModel::moveResources(const QList<int> &resourceIds, int targetPosition)
+void KisTagFilterResourceProxyModel::moveResources(const QList<int> &resourceIds, int targetItemId, bool insertAfter)
 {
     if (d->resourceType != ResourceType::PaintOpPresets) return;
     if (resourceIds.isEmpty()) return;
 
     QString tagUrl = getCurrentTagUrl();
     initializeOrderForCurrentTag();
-    KisPresetOrderManager::instance()->moveResources(tagUrl, resourceIds, targetPosition);
+
+    KisPresetOrderManager *orderManager = KisPresetOrderManager::instance();
+
+    // Convert target item ID to order manager position
+    int targetPosition;
+    if (targetItemId < 0) {
+        // Append to end
+        targetPosition = orderManager->getOrderForTag(tagUrl).size();
+    } else {
+        // Find the target item's position in the order manager
+        int itemPosition = orderManager->getPosition(tagUrl, targetItemId);
+
+        if (itemPosition < 0) {
+            // Target item doesn't have a position (shouldn't happen normally)
+            // Insert at the beginning
+            targetPosition = 0;
+        } else if (insertAfter) {
+            // Insert AFTER the target item
+            targetPosition = itemPosition + 1;
+        } else {
+            // Insert BEFORE the target item
+            targetPosition = itemPosition;
+        }
+    }
+
+    orderManager->moveResources(tagUrl, resourceIds, targetPosition);
 }
 
 void KisTagFilterResourceProxyModel::initializeOrderForCurrentTag()
