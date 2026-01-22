@@ -45,6 +45,7 @@ struct Q_DECL_HIDDEN KisResourceItemListView::Private
     bool clickedOnSelected {false};      // True if clicked item was already selected
     QPoint dragStartPosition;
     QModelIndex dragStartIndex;
+    int dragStartResourceId {-1};        // Stable ID captured at mouse press (survives model updates)
     QModelIndex dropTargetIndex;
     KisResourceItemListView::DropZone dropZone {KisResourceItemListView::DropNone};
     QList<int> draggedResourceIds;       // Track IDs of items being dragged
@@ -274,20 +275,32 @@ void KisResourceItemListView::mousePressEvent(QMouseEvent *event)
         m_d->dragStartIndex = indexAt(event->pos());
         m_d->potentialDrag = false;
         m_d->clickedOnSelected = false;
+        m_d->dragStartResourceId = -1;
 
         if (m_d->dragStartIndex.isValid()) {
+            // Capture resource ID BEFORE any selection changes
+            // (selection changes can trigger model updates that invalidate the index)
+            m_d->dragStartResourceId = m_d->dragStartIndex.data(Qt::UserRole + KisAbstractResourceModel::Id).toInt();
+
             // Check if clicked item is already selected
             m_d->clickedOnSelected = selectionModel()->isSelected(m_d->dragStartIndex);
 
-            // If the item is already selected and no modifier keys,
-            // we might be starting a drag - don't change selection yet
-            if (m_d->clickedOnSelected &&
-                !(event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier))) {
+            // If no modifier keys, we might be starting a drag
+            // Handle selection ourselves to prevent rubber band from appearing
+            if (!(event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier))) {
                 m_d->potentialDrag = true;
-                // Don't call parent - this prevents deselecting other items
-                // Use NoUpdate flag to set current index WITHOUT changing selection
-                // (setCurrentIndex() would call selectionCommand() which could clear selection)
-                selectionModel()->setCurrentIndex(m_d->dragStartIndex, QItemSelectionModel::NoUpdate);
+
+                if (m_d->clickedOnSelected) {
+                    // Item already selected - don't change selection yet
+                    // Use NoUpdate flag to set current index WITHOUT changing selection
+                    selectionModel()->setCurrentIndex(m_d->dragStartIndex, QItemSelectionModel::NoUpdate);
+                } else {
+                    // Item not selected - select it immediately (this becomes the drag item)
+                    // This also prevents rubber band since we handle selection ourselves
+                    selectionModel()->select(m_d->dragStartIndex,
+                        QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Current);
+                }
+                // Don't call parent - this prevents rubber band initialization
                 return;
             }
         }
@@ -346,11 +359,12 @@ void KisResourceItemListView::mouseReleaseEvent(QMouseEvent *event)
     m_d->potentialDrag = false;
 
     // If we were in potential drag mode but didn't actually drag,
-    // now apply the single selection (click on already-selected item)
+    // finalize the selection (ensures only this item is selected, clearing any multi-selection)
     if (wasPotentialDrag && !wasDragging && clickedIndex.isValid()) {
         if (event->button() == Qt::LeftButton &&
             !(event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier))) {
-            // Single click on selected item without drag = select only this item
+            // Single click without drag = ensure only this item is selected
+            // This clears multi-selection if clicking on one of multiple selected items
             selectionModel()->select(clickedIndex,
                 QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Current);
         }
@@ -370,16 +384,11 @@ void KisResourceItemListView::startDrag()
     // Get selected items for drag
     QList<int> resourceIds = getSelectedResourceIds();
 
-    // Ensure the drag start item is included
-    if (m_d->dragStartIndex.isValid()) {
-        int dragStartId = m_d->dragStartIndex.data(Qt::UserRole + KisAbstractResourceModel::Id).toInt();
-        if (dragStartId > 0 && !resourceIds.contains(dragStartId)) {
-            // Item under cursor wasn't selected - select it and use only it
-            selectionModel()->select(m_d->dragStartIndex,
-                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Current);
-            resourceIds.clear();
-            resourceIds.append(dragStartId);
-        }
+    // Ensure the drag start item is included (use stored ID since index may be stale)
+    if (m_d->dragStartResourceId > 0 && !resourceIds.contains(m_d->dragStartResourceId)) {
+        // Item under cursor wasn't in selection - use only it
+        resourceIds.clear();
+        resourceIds.append(m_d->dragStartResourceId);
     }
 
     if (resourceIds.isEmpty()) {
@@ -402,11 +411,19 @@ void KisResourceItemListView::startDrag()
     QDrag *drag = new QDrag(this);
     drag->setMimeData(mimeData);
 
-    // Set drag pixmap from first selected item
-    QPixmap pixmap = m_d->dragStartIndex.data(Qt::DecorationRole).value<QIcon>().pixmap(32, 32);
-    if (!pixmap.isNull()) {
-        drag->setPixmap(pixmap);
-        drag->setHotSpot(QPoint(16, 16));
+    // Set drag pixmap - find current index for the resource ID
+    if (model()) {
+        for (int row = 0; row < model()->rowCount(); ++row) {
+            QModelIndex idx = model()->index(row, 0);
+            if (idx.data(Qt::UserRole + KisAbstractResourceModel::Id).toInt() == m_d->dragStartResourceId) {
+                QPixmap pixmap = idx.data(Qt::DecorationRole).value<QIcon>().pixmap(32, 32);
+                if (!pixmap.isNull()) {
+                    drag->setPixmap(pixmap);
+                    drag->setHotSpot(QPoint(16, 16));
+                }
+                break;
+            }
+        }
     }
 
     // Execute drag - this blocks until drop or cancel
@@ -420,6 +437,7 @@ void KisResourceItemListView::stopDrag()
     m_d->isDragging = false;
     m_d->potentialDrag = false;
     m_d->clickedOnSelected = false;
+    m_d->dragStartResourceId = -1;
     m_d->dragHighlightTimer->stop();
     m_d->dropTargetIndex = QModelIndex();
     m_d->dropZone = DropNone;
