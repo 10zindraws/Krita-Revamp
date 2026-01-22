@@ -72,6 +72,8 @@ public:
     /// Note: only role is significant, column is not.
     QVariant data(const QModelIndex &index, int role) const override;
 
+    void refreshResource(int resourceId);
+
     // Abstract Tag API
     bool tagResources(const KisTagSP tag, const QVector<int> &resourceIds) override;
     bool untagResources(const KisTagSP tag, const QVector<int> &resourceId) override;

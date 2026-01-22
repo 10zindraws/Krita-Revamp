@@ -177,6 +177,29 @@ QVariant KisAllTagResourceModel::data(const QModelIndex &index, int role) const
     return v;
 }
 
+void KisAllTagResourceModel::refreshResource(int resourceId)
+{
+    if (resourceId < 0) {
+        return;
+    }
+
+    resetQuery();
+
+    QVector<QModelIndex> indexes;
+    for (int i = 0; i < rowCount(); ++i)  {
+        const QModelIndex idx = this->index(i, 0);
+        KIS_ASSERT_RECOVER(idx.isValid()) { continue; }
+
+        if (idx.data(Qt::UserRole + KisAllTagResourceModel::ResourceId).toInt() == resourceId) {
+            indexes << idx;
+        }
+    }
+
+    Q_FOREACH(const QModelIndex &index, indexes) {
+        Q_EMIT dataChanged(index, index);
+    }
+}
+
 bool KisAllTagResourceModel::tagResources(const KisTagSP tag, const QVector<int>& resourceIds)
 {
     KIS_SAFE_ASSERT_RECOVER_RETURN_VALUE(tag && tag->valid() && tag->id() >= 0, false);

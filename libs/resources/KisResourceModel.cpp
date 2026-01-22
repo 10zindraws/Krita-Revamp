@@ -18,6 +18,7 @@
 #include <KisResourceModelProvider.h>
 #include <KisStorageModel.h>
 #include <KisTagModel.h>
+#include <KisTagResourceModel.h>
 #include <KisResourceTypes.h>
 #include <kis_debug.h>
 #include <KisGlobalResourcesInterface.h>
@@ -925,7 +926,15 @@ bool KisResourceModel::renameResource(KoResourceSP resource, const QString &name
 {
     KisAbstractResourceModel *source = dynamic_cast<KisAbstractResourceModel*>(sourceModel());
     if (source) {
-        return source->renameResource(resource, name);
+        const bool result = source->renameResource(resource, name);
+        if (result && resource && resource->valid()) {
+            KisAllTagResourceModel *tagModel =
+                KisResourceModelProvider::tagResourceModel(resource->resourceType().first);
+            if (tagModel) {
+                tagModel->refreshResource(resource->resourceId());
+            }
+        }
+        return result;
     }
     return false;
 }
