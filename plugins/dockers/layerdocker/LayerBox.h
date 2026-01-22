@@ -76,10 +76,12 @@ public:
     void setViewManager(KisViewManager* kisview) override;
     void setCanvas(KoCanvasBase *canvas) override;
     void unsetCanvas() override;
+    QSize minimumSizeHint() const override;
 
 protected:
     void showEvent(QShowEvent *event) override;
     void hideEvent(QHideEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private Q_SLOTS:
 
@@ -150,6 +152,7 @@ private:
     qint32 convertOpacityToInt(qreal opacity);
 
     KisNodeSP findNonHidableNode(KisNodeSP startNode);
+    void updateToolbarButtonVisibility();
 private:
 
     QPointer<KisCanvas2> m_canvas;

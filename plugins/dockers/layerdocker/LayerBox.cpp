@@ -34,6 +34,8 @@
 #include <QWidgetAction>
 #include <QProxyStyle>
 #include <QStyleFactory>
+#include <QStyle>
+#include <QSizePolicy>
 
 #include <kis_debug.h>
 #include <klocalizedstring.h>
@@ -126,6 +128,51 @@ public:
     }
 };
 
+namespace
+{
+int widgetWidthHint(QWidget *widget)
+{
+    if (!widget) {
+        return 0;
+    }
+    return qMax(widget->minimumSizeHint().width(), widget->sizeHint().width());
+}
+
+int layoutSpacing(QLayout *layout, QWidget *referenceWidget)
+{
+    if (!layout) {
+        return 0;
+    }
+    int spacing = layout->spacing();
+    if (spacing >= 0) {
+        return spacing;
+    }
+    if (!referenceWidget) {
+        return 0;
+    }
+    spacing = referenceWidget->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing, nullptr, referenceWidget);
+    if (spacing < 0) {
+        spacing = referenceWidget->style()->layoutSpacing(QSizePolicy::DefaultType, QSizePolicy::DefaultType, Qt::Horizontal);
+    }
+    return qMax(0, spacing);
+}
+
+int layoutAvailableWidth(QLayout *layout, QWidget *fallbackWidget)
+{
+    if (!layout) {
+        return 0;
+    }
+    int available = layout->contentsRect().width();
+    if (available <= 0) {
+        available = layout->geometry().width();
+    }
+    if (available <= 0 && fallbackWidget) {
+        available = fallbackWidget->width();
+    }
+    return qMax(0, available);
+}
+} // namespace
+
 inline void LayerBox::connectActionToButton(KisViewManager* viewManager, QAbstractButton *button, const QString &id)
 {
     if (!viewManager || !button) return;
@@ -169,9 +216,28 @@ LayerBox::LayerBox()
     KisConfig cfg(false);
 
     QWidget* mainWidget = new QWidget(this);
+    mainWidget->setMinimumSize(0, 0);
+    {
+        QSizePolicy mainPolicy = mainWidget->sizePolicy();
+        mainPolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+        mainWidget->setSizePolicy(mainPolicy);
+    }
     setWidget(mainWidget);
+    setMinimumSize(0, 0);
+    {
+        QSizePolicy dockPolicy = sizePolicy();
+        dockPolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+        setSizePolicy(dockPolicy);
+    }
 
     m_wdgLayerBox->setupUi(mainWidget);
+    m_wdgLayerBox->verticalLayout->setSizeConstraint(QLayout::SetNoConstraint);
+    {
+        QSizePolicy listPolicy = m_wdgLayerBox->listLayers->sizePolicy();
+        listPolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+        m_wdgLayerBox->listLayers->setSizePolicy(listPolicy);
+        m_wdgLayerBox->listLayers->setMinimumWidth(0);
+    }
 
     QStyle *newStyle = QStyleFactory::create(m_wdgLayerBox->listLayers->style()->objectName());
     // proxy style steals the ownership of the style and deletes it later
@@ -199,11 +265,33 @@ LayerBox::LayerBox()
     m_wdgLayerBox->bnProperties->setIconSize(QSize(22, 22));
     m_wdgLayerBox->bnDuplicate->setIconSize(QSize(22, 22));
 
+    m_wdgLayerBox->bnLower->setProperty("forceHidden", true);
+    m_wdgLayerBox->bnRaise->setProperty("forceHidden", true);
+    m_wdgLayerBox->bnDuplicate->setProperty("forceHidden", true);
+    m_wdgLayerBox->bnProperties->setProperty("forceHidden", true);
+    m_wdgLayerBox->bnLower->setVisible(false);
+    m_wdgLayerBox->bnRaise->setVisible(false);
+    m_wdgLayerBox->bnDuplicate->setVisible(false);
+    m_wdgLayerBox->bnProperties->setVisible(false);
+
     m_wdgLayerBox->bnLower->setEnabled(false);
     m_wdgLayerBox->bnRaise->setEnabled(false);
 
+    {
+        QSizePolicy comboPolicy = m_wdgLayerBox->cmbComposite->sizePolicy();
+        comboPolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+        m_wdgLayerBox->cmbComposite->setSizePolicy(comboPolicy);
+        m_wdgLayerBox->cmbComposite->setMinimumWidth(0);
+
+        QSizePolicy opacityPolicy = m_wdgLayerBox->doubleOpacity->sizePolicy();
+        opacityPolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+        m_wdgLayerBox->doubleOpacity->setSizePolicy(opacityPolicy);
+        m_wdgLayerBox->doubleOpacity->setMinimumWidth(0);
+    }
+
     if (cfg.sliderLabels()) {
         m_wdgLayerBox->opacityLabel->hide();
+        m_wdgLayerBox->opacityLabel->setProperty("forceHidden", true);
         m_wdgLayerBox->doubleOpacity->setPrefix(QString("%1:  ").arg(i18n("Opacity")));
     }
     m_wdgLayerBox->doubleOpacity->setRange(0, 100, 0);
@@ -431,6 +519,8 @@ LayerBox::LayerBox()
     layerSelectionAction->setDefaultWidget(layerSelectionCheckBox);
     configureMenu->addAction(layerSelectionAction);
     connect(layerSelectionCheckBox, SIGNAL(stateChanged(int)), SLOT(slotUpdateUseLayerSelectionCheckbox()));
+
+    updateToolbarButtonVisibility();
 }
 
 LayerBox::~LayerBox()
@@ -645,6 +735,13 @@ void LayerBox::unsetCanvas()
     m_canvas = 0;
 }
 
+QSize LayerBox::minimumSizeHint() const
+{
+    QSize hint = QDockWidget::minimumSizeHint();
+    hint.setWidth(0);
+    return hint;
+}
+
 void LayerBox::showEvent(QShowEvent *event)
 {
     QDockWidget::showEvent(event);
@@ -652,12 +749,91 @@ void LayerBox::showEvent(QShowEvent *event)
     if (m_canvas) {
         m_nodeModel->setIdleTaskManager(m_canvas->viewManager()->idleTasksManager());
     }
+
+    updateToolbarButtonVisibility();
 }
 
 void LayerBox::hideEvent(QHideEvent *event)
 {
     QDockWidget::hideEvent(event);
     m_nodeModel->setIdleTaskManager(0);
+}
+
+void LayerBox::resizeEvent(QResizeEvent *event)
+{
+    QDockWidget::resizeEvent(event);
+    updateToolbarButtonVisibility();
+}
+
+void LayerBox::updateToolbarButtonVisibility()
+{
+    if (!m_wdgLayerBox) {
+        return;
+    }
+
+    const int topAvailable = layoutAvailableWidth(m_wdgLayerBox->hbox2, m_wdgLayerBox->cmbComposite);
+    if (topAvailable > 0) {
+        const int spacing = layoutSpacing(m_wdgLayerBox->hbox2, m_wdgLayerBox->cmbComposite);
+        const int filterWidth = widgetWidthHint(m_wdgLayerBox->bnLayerFilters);
+        const int minComboWidth = 40;
+        const int requiredWithFilter = minComboWidth + spacing + filterWidth;
+        m_wdgLayerBox->bnLayerFilters->setVisible(topAvailable >= requiredWithFilter);
+    }
+
+    const int opacityAvailable = layoutAvailableWidth(m_wdgLayerBox->opacityLayout, m_wdgLayerBox->doubleOpacity);
+    if (opacityAvailable > 0) {
+        const bool forceHideLabel = m_wdgLayerBox->opacityLabel->property("forceHidden").toBool();
+        const int spacing = layoutSpacing(m_wdgLayerBox->opacityLayout, m_wdgLayerBox->doubleOpacity);
+        const int labelWidth = widgetWidthHint(m_wdgLayerBox->opacityLabel);
+        const int minSliderWidth = 40;
+
+        bool showLabel = !forceHideLabel && opacityAvailable >= (labelWidth + spacing + minSliderWidth);
+        m_wdgLayerBox->opacityLabel->setVisible(showLabel);
+
+        const int baseWidth = (showLabel ? labelWidth + spacing : 0) + minSliderWidth;
+        const int configWidth = widgetWidthHint(m_wdgLayerBox->configureLayerDockerToolbar);
+        const int requiredWithConfig = baseWidth + spacing + configWidth;
+        m_wdgLayerBox->configureLayerDockerToolbar->setVisible(opacityAvailable >= requiredWithConfig);
+    }
+
+    const int bottomAvailable = layoutAvailableWidth(m_wdgLayerBox->hbox1, m_wdgLayerBox->bnAdd);
+    if (bottomAvailable > 0) {
+        const int spacing = layoutSpacing(m_wdgLayerBox->hbox1, m_wdgLayerBox->bnAdd);
+        const QList<QWidget *> buttons = {
+            m_wdgLayerBox->bnAdd,
+            m_wdgLayerBox->bnDelete
+        };
+
+        int visibleCount = 0;
+        int totalWidth = 0;
+        for (int i = 0; i < buttons.size(); ++i) {
+            const int buttonWidth = widgetWidthHint(buttons[i]);
+            const int nextWidth = totalWidth + (visibleCount > 0 ? spacing : 0) + buttonWidth;
+            if (nextWidth <= bottomAvailable) {
+                totalWidth = nextWidth;
+                ++visibleCount;
+            } else {
+                break;
+            }
+        }
+
+        for (int i = 0; i < buttons.size(); ++i) {
+            buttons[i]->setVisible(i < visibleCount);
+        }
+    }
+
+    if (m_wdgLayerBox->bnDuplicate->property("forceHidden").toBool()) {
+        m_wdgLayerBox->bnDuplicate->setVisible(false);
+    }
+    if (m_wdgLayerBox->bnProperties->property("forceHidden").toBool()) {
+        m_wdgLayerBox->bnProperties->setVisible(false);
+    }
+    if (m_wdgLayerBox->bnLower->property("forceHidden").toBool()) {
+        m_wdgLayerBox->bnLower->setVisible(false);
+    }
+    if (m_wdgLayerBox->bnRaise->property("forceHidden").toBool()) {
+        m_wdgLayerBox->bnRaise->setVisible(false);
+    }
 }
 
 void LayerBox::notifyImageDeleted()
