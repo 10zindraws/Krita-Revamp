@@ -11,6 +11,7 @@
 #include <QDesktopWidget>
 #include <QPainter>
 #include <QScreen>
+#include <QTabletEvent>
 
 #include <kis_global.h>
 #include <KisVisualColorSelector.h>
@@ -21,6 +22,9 @@ WGSelectorPopup::WGSelectorPopup(QWidget *parent)
     : QWidget(parent, Qt::Popup | Qt::FramelessWindowHint), m_hideTimer(new QTimer(this))
 {
     setAttribute(Qt::WA_TranslucentBackground);
+    // Prevent tablet events from being captured by the canvas, ensuring
+    // immediate responsiveness when dragging with pen tablets
+    setAttribute(Qt::WA_NoMousePropagation, true);
     QBoxLayout *lo = new QBoxLayout(QBoxLayout::LeftToRight, this);
     lo->setObjectName("WGSelectorPopupLayout");
     lo->setSizeConstraint(QLayout::SetFixedSize);
@@ -119,6 +123,53 @@ void WGSelectorPopup::slotInteraction(bool active)
     if (!active && !underMouse()) {
         hide();
     }
+}
+
+void WGSelectorPopup::tabletEvent(QTabletEvent *event)
+{
+    // For Qt::Popup windows, tablet events may be delayed due to special input
+    // handling. Actively forward tablet events to the child widget under the
+    // cursor for immediate responsiveness.
+    QPoint eventPos = event->pos();
+    QWidget *child = childAt(eventPos);
+    if (child) {
+        // Find the deepest child widget at this position
+        QPoint childPos = child->mapFrom(this, eventPos);
+        QWidget *deeperChild = child->childAt(childPos);
+        while (deeperChild) {
+            child = deeperChild;
+            childPos = child->mapFrom(this, eventPos);
+            deeperChild = child->childAt(childPos);
+        }
+
+        // Create a new tablet event with position relative to the child widget
+        QPointF localPosF = child->mapFrom(this, eventPos);
+        QTabletEvent childEvent(event->type(),
+                                localPosF,
+                                event->globalPosF(),
+                                event->device(),
+                                event->pointerType(),
+                                event->pressure(),
+                                event->xTilt(),
+                                event->yTilt(),
+                                event->tangentialPressure(),
+                                event->rotation(),
+                                event->z(),
+                                event->modifiers(),
+                                event->uniqueId(),
+                                event->button(),
+                                event->buttons());
+
+        QApplication::sendEvent(child, &childEvent);
+
+        if (childEvent.isAccepted()) {
+            event->accept();
+            return;
+        }
+    }
+
+    // If not handled, ignore to allow normal propagation
+    event->ignore();
 }
 
 void WGSelectorPopup::replaceCentranWidget(QWidget *widget)

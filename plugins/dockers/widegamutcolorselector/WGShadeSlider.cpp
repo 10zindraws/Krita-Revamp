@@ -11,6 +11,7 @@
 #include <QImage>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QTabletEvent>
 #include <QVector4D>
 #include <QtMath>
 
@@ -34,6 +35,7 @@ struct WGShadeSlider::Private
     bool widgetSizeOk {false};
     bool sliderMode {true};
     bool imageNeedsUpdate {true};
+    bool tabletDragging {false};
 };
 
 WGShadeSlider::WGShadeSlider(WGSelectorDisplayConfigSP config, QWidget *parent, KisVisualColorModelSP model)
@@ -129,6 +131,44 @@ void WGShadeSlider::mouseReleaseEvent(QMouseEvent *event)
         Q_EMIT sigInteraction(false);
     } else {
         event->ignore();
+    }
+}
+
+void WGShadeSlider::tabletEvent(QTabletEvent *event)
+{
+    // Handle tablet events directly to avoid the delay from Qt's
+    // tablet-to-mouse event synthesis. Convert to mouse events
+    // and forward to the mouse handlers immediately.
+    // Tablet move events don't return a "button", so also check event type
+    if (event->button() == Qt::LeftButton || event->type() == QEvent::TabletMove) {
+        QMouseEvent *mouseEvent = nullptr;
+        switch (event->type()) {
+        case QEvent::TabletPress:
+            mouseEvent = new QMouseEvent(QEvent::MouseButtonPress, event->pos(),
+                                         Qt::LeftButton, Qt::LeftButton, event->modifiers());
+            m_d->tabletDragging = true;
+            mousePressEvent(mouseEvent);
+            event->accept();
+            break;
+        case QEvent::TabletMove:
+            mouseEvent = new QMouseEvent(QEvent::MouseMove, event->pos(),
+                                         m_d->tabletDragging ? Qt::LeftButton : Qt::NoButton,
+                                         m_d->tabletDragging ? Qt::LeftButton : Qt::NoButton,
+                                         event->modifiers());
+            mouseMoveEvent(mouseEvent);
+            event->accept();
+            break;
+        case QEvent::TabletRelease:
+            mouseEvent = new QMouseEvent(QEvent::MouseButtonRelease, event->pos(),
+                                         Qt::LeftButton, Qt::LeftButton, event->modifiers());
+            m_d->tabletDragging = false;
+            mouseReleaseEvent(mouseEvent);
+            event->accept();
+            break;
+        default:
+            break;
+        }
+        delete mouseEvent;
     }
 }
 

@@ -29,6 +29,7 @@ protected:
     void leaveEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event);
     void hideEvent(QHideEvent *event) override;
+    void tabletEvent(QTabletEvent *event) override;
 
 Q_SIGNALS:
     void sigPopupClosed(WGSelectorPopup *popup);
