@@ -45,11 +45,11 @@
 class KisPresetDelegate : public QAbstractItemDelegate
 {
 public:
-    // Stroke preview ratio range: 1:4 to 1:4.5.
+    // Stroke preview ratio range: 1:3.5 to 1:4.25.
     static constexpr int SLIDER_MIN = 30;
     static constexpr int SLIDER_MAX = 80;
-    static constexpr double ASPECT_RATIO_MIN = 4.0;
-    static constexpr double ASPECT_RATIO_MAX = 4.5;
+    static constexpr double ASPECT_RATIO_MIN = 3.5;
+    static constexpr double ASPECT_RATIO_MAX = 4.25;
 
     KisPresetDelegate(QObject * parent = nullptr)
         : QAbstractItemDelegate(parent)
