@@ -141,7 +141,7 @@ void KisTagChooserWidget::tagToolRenameCurrentTag(const QString& tagName)
     KisTagSP tag = currentlySelectedTag();
     bool canRenameCurrentTag = !tag.isNull() && (tagName != tag->name());
 
-    if (tagName == KisAllTagsModel::urlAll() || tagName == KisAllTagsModel::urlAllUntagged()) {
+    if (tagName == KisAllTagsModel::urlAll()) {
         QMessageBox::information(this, i18nc("Dialog title", "Can't rename the tag"), i18nc("Dialog message", "You can't use this name for your custom tags."), QMessageBox::Ok);
         return;
     }
@@ -274,7 +274,7 @@ KisTagChooserWidget::OverwriteDialogOptions KisTagChooserWidget::overwriteTagDia
 
 void KisTagChooserWidget::addTag(const QString &tagName, KoResourceSP resource)
 {
-    if (tagName == KisAllTagsModel::urlAll() || tagName == KisAllTagsModel::urlAllUntagged()) {
+    if (tagName == KisAllTagsModel::urlAll()) {
         QMessageBox::information(this, i18nc("Dialog title", "Can't create the tag"), i18nc("Dialog message", "You can't use this name for your custom tags."), QMessageBox::Ok);
         return;
     }
@@ -302,7 +302,7 @@ void KisTagChooserWidget::addTag(const QString &tagName, KoResourceSP resource)
 
 void KisTagChooserWidget::addTag(KisTagSP tag, KoResourceSP resource)
 {
-    if (tag->name() == KisAllTagsModel::urlAll() || tag->name() == KisAllTagsModel::urlAllUntagged()) {
+    if (tag->name() == KisAllTagsModel::urlAll()) {
         QMessageBox::information(this, i18nc("Dialog title", "Can't rename the tag"), i18nc("Dialog message", "You can't use this name for your custom tags."), QMessageBox::Ok);
         return;
     }

@@ -60,8 +60,7 @@ public:
     };
 
     enum Ids { // to get actual id, you need to add s_fakeRowsCount
-        All = -2, // so it gets on top in the combobox
-        AllUntagged = -1,
+        All = -1, // so it gets on top in the combobox
     };
 
     ~KisAllTagsModel() override;
@@ -90,7 +89,6 @@ public:
 
     // TODO: they can be static const variables, too, if it's better than functions
     static QString urlAll() { return "All"; }
-    static QString urlAllUntagged() { return "All Untagged"; }
 
 private Q_SLOTS:
 

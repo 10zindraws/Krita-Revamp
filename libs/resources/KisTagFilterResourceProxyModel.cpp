@@ -250,15 +250,9 @@ void KisTagFilterResourceProxyModel::updateTagFilter()
 
         if (d->currentTagFilter &&
             !ignoreTagFiltering &&
-            d->currentTagFilter->url() != KisAllTagsModel::urlAll() &&
-            d->currentTagFilter->url() != KisAllTagsModel::urlAllUntagged()) {
+            d->currentTagFilter->url() != KisAllTagsModel::urlAll()) {
 
             filter << d->currentTagFilter;
-        } else {
-            // combination with for untagged resources in not implemented
-            // in KisTagResourceModel
-            KIS_SAFE_ASSERT_RECOVER_NOOP(!d->currentTagFilter ||
-                                         d->currentTagFilter->url() != KisAllTagsModel::urlAllUntagged());
         }
 
         d->tagResourceModel->setTagsFilter(filter);
@@ -276,14 +270,8 @@ void KisTagFilterResourceProxyModel::updateTagFilter()
             d->resourceModel->showOnlyUntaggedResources(false);
         }
         else {
-            if (d->currentTagFilter->url() == KisAllTagsModel::urlAllUntagged()) {
-                desiredModel = d->resourceModel;
-                d->resourceModel->showOnlyUntaggedResources(true);
-            }
-            else {
-                desiredModel = d->tagResourceModel;
-                d->tagResourceModel->setTagsFilter(QVector<KisTagSP>() << d->currentTagFilter);
-            }
+            desiredModel = d->tagResourceModel;
+            d->tagResourceModel->setTagsFilter(QVector<KisTagSP>() << d->currentTagFilter);
         }
     }
 

@@ -23,7 +23,7 @@
 
 #include <kis_assert.h>
 
-static int s_fakeRowsCount {2};
+static int s_fakeRowsCount {1};
 
 struct KisAllTagsModel::Private {
     QSqlQuery query;
@@ -143,33 +143,6 @@ QVariant KisAllTagsModel::data(const QModelIndex &index, int role) const
             default:
                 ;
             }
-        } else if (index.row() == KisAllTagsModel::AllUntagged + s_fakeRowsCount) {
-            switch(role) {
-            case Qt::DisplayRole:   // fallthrough
-            case Qt::ToolTipRole:   // fallthrough
-            case Qt::StatusTipRole: // fallthrough
-            case Qt::WhatsThisRole:
-            case Qt::UserRole + Name:
-                return i18n("All Untagged");
-            case Qt::UserRole + Id:
-                return QString::number(KisAllTagsModel::AllUntagged);
-            case Qt::UserRole + Url: {
-                return urlAllUntagged();
-            }
-            case Qt::UserRole + ResourceType:
-                return d->resourceType;
-            case Qt::UserRole + Active:
-                return true;
-            case Qt::UserRole + KisTagRole:
-            {
-                KisTagSP tag = tagForIndex(index);
-                QVariant response;
-                response.setValue(tag);
-                return response;
-            }
-            default:
-                ;
-            }
         }
     }
     else {
@@ -258,7 +231,7 @@ QModelIndex KisAllTagsModel::indexForTag(KisTagSP tag) const
 {
     if (!tag) return QModelIndex();
     // For now a linear seek to find the first tag
-    if (tag->id() < 0 && (tag->url() == urlAll() || tag->url() == urlAllUntagged())) {
+    if (tag->id() < 0 && tag->url() == urlAll()) {
         // this must be either a fake tag id, or a "naked" tag
         // TODO: do we even use "naked tags"? won't it be better to just use QStrings?
         return index(tag->id() + s_fakeRowsCount, 0);
@@ -304,16 +277,6 @@ KisTagSP KisAllTagsModel::tagForIndex(QModelIndex index) const
             tag->setUrl(urlAll());
             tag->setComment(i18n("All Resources"));
             tag->setId(KisAllTagsModel::All);
-            tag->setActive(true);
-            tag->setValid(true);
-        }
-        else if (index.row() == KisAllTagsModel::AllUntagged + s_fakeRowsCount) {
-            tag.reset(new KisTag());
-            tag->setName(i18n("All Untagged"));
-            tag->setResourceType(d->resourceType);
-            tag->setUrl(urlAllUntagged());
-            tag->setComment(i18n("All Untagged Resources"));
-            tag->setId(KisAllTagsModel::AllUntagged);
             tag->setActive(true);
             tag->setValid(true);
         }
@@ -474,8 +437,6 @@ KisTagSP KisAllTagsModel::tagForUrl(const QString& tagUrl) const
 
     if (tagUrl == urlAll()) {
         return tagForIndex(index(Ids::All + s_fakeRowsCount, 0));
-    } else if (tagUrl == urlAllUntagged()) {
-        return tagForIndex(index(Ids::AllUntagged + s_fakeRowsCount, 0));
     }
 
     return KisResourceLocator::instance()->tagForUrl(tagUrl, d->resourceType);

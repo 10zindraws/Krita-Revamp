@@ -93,7 +93,7 @@ void TestTagModel::testRowCount()
     auto tester = new QAbstractItemModelTester(&tagModel);
     Q_UNUSED(tester);
     // There is always an "All" tag in the first row
-    QCOMPARE(tagModel.rowCount(), rowCount + 2);
+    QCOMPARE(tagModel.rowCount(), rowCount + 1);
 }
 
 void TestTagModel::testData()
