@@ -85,16 +85,17 @@ PaletteDockerDock::PaletteDockerDock( )
     m_ui->bnSavePalette->setDefaultAction(m_actSavePalette.data());
 
     // to make sure their icons have the same size
-    m_ui->bnRemove->setIconSize(QSize(16, 16));
-    m_ui->bnRename->setIconSize(QSize(16, 16));
-    m_ui->bnAdd->setIconSize(QSize(16, 16));
-    m_ui->bnEditPalette->setIconSize(QSize(16, 16));
-    m_ui->bnSavePalette->setIconSize(QSize(16, 16));
+    m_ui->bnRemove->setIconSize(QSize(12, 12));
+    m_ui->bnRename->setIconSize(QSize(12, 12));
+    m_ui->bnAdd->setIconSize(QSize(12, 12));
+    m_ui->bnEditPalette->setIconSize(QSize(12, 12));
+    m_ui->bnSavePalette->setIconSize(QSize(12, 12));
+    m_ui->bnColorSets->setIconSize(QSize(12, 12));
+    m_ui->bnLock->setIconSize(QSize(12, 12));
 
 
     m_ui->paletteView->setPaletteModel(m_model);
     m_ui->paletteView->setAllowModification(true);
-    m_ui->cmbNameList->setCompanionView(m_ui->paletteView);
 
     m_paletteEditor->setPaletteModel(m_model);
 
@@ -108,7 +109,6 @@ PaletteDockerDock::PaletteDockerDock( )
     connect(m_ui->paletteView, SIGNAL(doubleClicked(QModelIndex)),
             SLOT(slotPaletteIndexDoubleClicked(QModelIndex)));
     connect(m_model, SIGNAL(sigPaletteModified()), SLOT(slotUpdateLblPaletteName()));
-    connect(m_ui->cmbNameList, SIGNAL(sigColorSelected(const KoColor&)), SLOT(slotNameListSelection(const KoColor&)));
     connect(m_ui->bnLock, SIGNAL(toggled(bool)), SLOT(slotLockPalette(bool)));
 
     m_viewContextMenu.addAction(m_actModify.data());
@@ -133,8 +133,6 @@ PaletteDockerDock::PaletteDockerDock( )
         m_paletteChooser->setCurrentItem(defaultPalette);
     } else {
         m_ui->bnAdd->setEnabled(false);
-        m_ui->bnUndo->setEnabled(false);
-        m_ui->bnRedo->setEnabled(false);
         m_ui->bnRename->setEnabled(false);
         m_ui->bnRemove->setEnabled(false);
         m_ui->bnEditPalette->setEnabled(false);
@@ -143,9 +141,6 @@ PaletteDockerDock::PaletteDockerDock( )
 
         m_ui->paletteView->setAllowModification(false);
     }
-
-    //m_ui->bnUndo->setVisible(false);
-    //m_ui->bnRedo->setVisible(false);
 
 
     KoResourceServer<KoColorSet> *srv = KoResourceServerProvider::instance()->paletteServer();
@@ -291,17 +286,6 @@ void PaletteDockerDock::slotSetColorSet(KoColorSetSP colorSet)
 
         m_model->setColorSet(colorSet);
 
-        m_ui->bnUndo->setEnabled(colorSet->undoStack()->canUndo() && !colorSet->isLocked());
-        connect(colorSet->undoStack(), SIGNAL(canUndoChanged(bool)), m_ui->bnUndo, SLOT(setEnabled(bool)));
-        connect(colorSet->undoStack(), SIGNAL(undoTextChanged(QString)), this, SLOT(setUndoToolTip(QString)));
-
-        m_ui->bnRedo->setEnabled(colorSet->undoStack()->canRedo() && colorSet->isLocked());
-        connect(colorSet->undoStack(), SIGNAL(canRedoChanged(bool)), m_ui->bnRedo, SLOT(setEnabled(bool)));
-        connect(colorSet->undoStack(), SIGNAL(redoTextChanged(QString)), this, SLOT(setRedoToolTip(QString)));
-
-        connect(m_ui->bnUndo, SIGNAL(clicked()), this, SLOT(undo()));
-        connect(m_ui->bnRedo, SIGNAL(clicked()), this, SLOT(redo()));
-
         m_ui->bnLock->setChecked(colorSet->isLocked());
     }
     bool state = (bool)colorSet;
@@ -436,27 +420,6 @@ void PaletteDockerDock::slotLockPalette(bool locked)
     m_ui->paletteView->setAllowModification(!locked);
 }
 
-void PaletteDockerDock::setUndoToolTip(const QString &text)
-{
-    m_ui->bnUndo->setToolTip(text);
-}
-
-void PaletteDockerDock::setRedoToolTip(const QString &text)
-{
-    m_ui->bnRedo->setToolTip(text);
-}
-
-void PaletteDockerDock::undo()
-{
-    m_currentColorSet->undoStack()->undo();
-    slotUpdateLblPaletteName();
-}
-
-void PaletteDockerDock::redo()
-{
-    m_currentColorSet->undoStack()->redo();
-    slotUpdateLblPaletteName();
-}
 
 
 void PaletteDockerDock::slotFGColorResourceChanged(const KoColor &color)
@@ -521,12 +484,4 @@ void PaletteDockerDock::slotEditEntry()
     }
     m_paletteEditor->modifyEntry(index);
     slotUpdateLblPaletteName();
-}
-
-void PaletteDockerDock::slotNameListSelection(const KoColor &color)
-{
-    m_colorSelfUpdate = true;
-    m_ui->paletteView->selectClosestColor(color);
-    m_resourceProvider->setFGColor(color);
-    m_colorSelfUpdate = false;
 }

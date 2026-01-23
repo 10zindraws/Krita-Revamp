@@ -34,7 +34,7 @@
 #include <kis_debug.h>
 #include <KisResourceUserOperations.h>
 
-int KisPaletteView::MINIMUM_ROW_HEIGHT = 10;
+int KisPaletteView::MINIMUM_ROW_HEIGHT = 4;
 
 struct KisPaletteView::Private
 {

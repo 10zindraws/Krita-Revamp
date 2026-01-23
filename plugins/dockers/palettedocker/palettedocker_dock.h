@@ -73,7 +73,6 @@ private Q_SLOTS:
     void slotPaletteIndexSelected(const QModelIndex &index);
     void slotPaletteIndexClicked(const QModelIndex &index);
     void slotPaletteIndexDoubleClicked(const QModelIndex &index);
-    void slotNameListSelection(const KoColor &color);
     void slotSetColorSet(KoColorSetSP colorSet);
 
     void slotFGColorResourceChanged(const KoColor& color);
@@ -83,12 +82,6 @@ private Q_SLOTS:
     void slotUpdateLblPaletteName();
 
     void slotLockPalette(bool locked);
-
-    void setUndoToolTip(const QString &text);
-    void setRedoToolTip(const QString &text);
-
-    void undo();
-    void redo();
 
 private:
     void setEntryByForeground(const QModelIndex &index);
