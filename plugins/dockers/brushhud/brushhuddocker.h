@@ -4,8 +4,8 @@
  *  SPDX-License-Identifier: LGPL-2.0-or-later
  */
 
-#ifndef _OVERVIEW_DOCKER_H_
-#define _OVERVIEW_DOCKER_H_
+#ifndef _BRUSHHUD_DOCKER_H_
+#define _BRUSHHUD_DOCKER_H_
 
 #include <QObject>
 #include <QVariant>
@@ -15,12 +15,12 @@ class KisViewManager;
 /**
  * Template of view plugin
  */
-class OverviewDockerPlugin : public QObject
+class BrushHudDockerPlugin : public QObject
 {
     Q_OBJECT
     public:
-        OverviewDockerPlugin(QObject *parent, const QVariantList &);
-        ~OverviewDockerPlugin() override;
+        BrushHudDockerPlugin(QObject *parent, const QVariantList &);
+        ~BrushHudDockerPlugin() override;
 };
 
 #endif

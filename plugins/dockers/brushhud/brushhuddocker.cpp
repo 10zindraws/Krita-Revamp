@@ -4,27 +4,26 @@
  *  SPDX-License-Identifier: LGPL-2.0-or-later
  */
 
-#include "digitalmixer.h"
-#include "digitalmixer_dock.h"
-
+#include "brushhuddocker.h"
+#include "brushhud_dock.h"
 
 #include <kpluginfactory.h>
 
 #include <KoDockFactoryBase.h>
-
 #include <KoDockRegistry.h>
 
-K_PLUGIN_FACTORY_WITH_JSON(DigitalMixerPluginFactory, "krita_digitalmixer.json", registerPlugin<DigitalMixerPlugin>();)
 
-class DigitalMixerDockFactory : public KoDockFactoryBase {
+K_PLUGIN_FACTORY_WITH_JSON(PresetDockerPluginFactory, "krita_brushhud.json", registerPlugin<BrushHudDockerPlugin>();)
+
+class BrushHudDockerDockFactory : public KoDockFactoryBase {
 public:
-    DigitalMixerDockFactory()
+    BrushHudDockerDockFactory()
     {
     }
 
     QString id() const override
     {
-        return QString( "DigitalMixer" );
+        return QString( "BrushHudDocker" );
     }
 
     virtual Qt::DockWidgetArea defaultDockWidgetArea() const
@@ -34,8 +33,7 @@ public:
 
     QDockWidget* createDockWidget() override
     {
-        DigitalMixerDock * dockWidget = new DigitalMixerDock();
-        
+        BrushHudDock * dockWidget = new BrushHudDock();
         dockWidget->setObjectName(id());
 
         return dockWidget;
@@ -51,15 +49,14 @@ private:
 };
 
 
-DigitalMixerPlugin::DigitalMixerPlugin(QObject *parent, const QVariantList &)
+BrushHudDockerPlugin::BrushHudDockerPlugin(QObject *parent, const QVariantList &)
     : QObject(parent)
 {
-    KoDockRegistry::instance()->add(new DigitalMixerDockFactory());
+    KoDockRegistry::instance()->add(new BrushHudDockerDockFactory());
 }
 
-DigitalMixerPlugin::~DigitalMixerPlugin()
+BrushHudDockerPlugin::~BrushHudDockerPlugin()
 {
-
 }
 
-#include "digitalmixer.moc"
+#include "brushhuddocker.moc"

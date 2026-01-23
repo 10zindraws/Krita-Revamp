@@ -22,8 +22,6 @@ public:
     RecorderDockerPlugin(QObject* parent, const QVariantList&);
     ~RecorderDockerPlugin() override;
 
-private:
-    KisViewManager* m_view {nullptr};
 };
 
 #endif

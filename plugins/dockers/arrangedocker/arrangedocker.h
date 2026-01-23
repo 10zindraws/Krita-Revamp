@@ -21,8 +21,7 @@ class ArrangeDockerPlugin : public QObject
     public:
         ArrangeDockerPlugin(QObject *parent, const QVariantList &);
         ~ArrangeDockerPlugin() override;
-    private:
-        KisViewManager* m_view {nullptr};
+
 };
 
 #endif
