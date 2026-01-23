@@ -86,7 +86,9 @@ KisResourceTaggingManager::~KisResourceTaggingManager()
 void KisResourceTaggingManager::showTaggingBar(bool show)
 {
     show ? d->tagFilter->show() : d->tagFilter->hide();
-    show ? d->tagChooser->show() : d->tagChooser->hide();
+    // Note: tagChooser is kept hidden - its functionality is used but not displayed
+    // The tagToolButton is now displayed separately in the layout
+    d->tagChooser->hide();
 
     KConfigGroup group =  KSharedConfig::openConfig()->group("SelectedTags");
     QString tag = group.readEntry<QString>(d->resourceType, "All");

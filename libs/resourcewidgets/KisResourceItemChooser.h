@@ -21,6 +21,7 @@
 
 #include <KoResource.h>
 #include <KisKineticScroller.h>
+#include <KisTag.h>
 #include "KisPopupButton.h"
 #include "ResourceListViewModes.h"
 
@@ -162,6 +163,7 @@ private Q_SLOTS:
     void afterFilterChanged();
     void slotSaveSplitterState();
     void slotResourcesReordered(const QList<int> &resourceIds, int targetItemId, bool insertAfter);
+    void slotTagChanged(KisTagSP tag);
 
 protected:
     void showEvent(QShowEvent *event) override;

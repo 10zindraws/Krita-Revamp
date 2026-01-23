@@ -114,6 +114,7 @@ private:
     class Private;
     Private* const d;
     friend class KisTagChooserWidget;
+    friend class KisResourceItemChooser;
 };
 
 #endif // KISTAGTOOLBUTTON_H

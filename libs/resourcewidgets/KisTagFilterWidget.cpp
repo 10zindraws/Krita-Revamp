@@ -71,8 +71,10 @@ KisTagFilterWidget::KisTagFilterWidget(KisTagModel* model, QWidget* parent)
     bool filterByTagCheckboxChecked = cfg.readEntry(d->configName, true);
     d->filterByTagCheckbox->setChecked(filterByTagCheckboxChecked);
 
+    // Hide the checkbox - it's no longer displayed in the UI
+    d->filterByTagCheckbox->hide();
 
-    filterBarLayout->addWidget(d->filterByTagCheckbox, 0, 1);
+    // Note: Checkbox is not added to layout - removed from UI
     connect(d->tagSearchLineEdit, SIGNAL(textChanged(QString)),
             this, SLOT(onTextChanged(QString)));
     connect(d->filterByTagCheckbox, SIGNAL(stateChanged(int)), this, SLOT(slotFilterByTagChanged(int)));

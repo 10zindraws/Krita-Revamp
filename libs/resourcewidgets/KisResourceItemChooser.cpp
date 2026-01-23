@@ -48,6 +48,7 @@
 #include "KisResourceItemDelegate.h"
 #include "KisTagFilterWidget.h"
 #include "KisTagChooserWidget.h"
+#include "KisTagToolButton.h"
 #include "KisResourceItemChooserSync.h"
 #include "KisResourceTaggingManager.h"
 #include <KisResourceUserOperations.h>
@@ -69,6 +70,7 @@ public:
     KisResourceTaggingManager *tagManager {0};
     KisPopupButton *viewModeButton {0};
     KisStorageChooserWidget *storagePopupButton {0};
+    class KisTagToolButton *tagToolButton {0};
 
     // Resources view
     KisResourceItemListView *view {0};
@@ -135,6 +137,27 @@ KisResourceItemChooser::KisResourceItemChooser(const QString &resourceType, bool
     d->storagePopupButton->setToolTip(i18n("Storage Resources"));
     d->storagePopupButton->setAutoRaise(true);
     d->storagePopupButton->setArrowVisible(false);
+
+    // Tag Tool button (extracted from tag chooser, placed in bottom row)
+    d->tagToolButton = new KisTagToolButton(this);
+    d->tagToolButton->setToolTip(i18n("Tag options"));
+
+    // Connect tag tool button to tag manager
+    // The tag manager's tagChooserWidget() will handle the tag tool button's signals
+    connect(d->tagToolButton, SIGNAL(popupMenuAboutToShow()),
+            d->tagManager->tagChooserWidget(), SLOT(tagToolContextMenuAboutToShow()));
+    connect(d->tagToolButton, SIGNAL(newTagRequested(QString)),
+            d->tagManager->tagChooserWidget(), SLOT(addTag(QString)));
+    connect(d->tagToolButton, SIGNAL(deletionOfCurrentTagRequested()),
+            d->tagManager->tagChooserWidget(), SLOT(tagToolDeleteCurrentTag()));
+    connect(d->tagToolButton, SIGNAL(renamingOfCurrentTagRequested(const QString&)),
+            d->tagManager->tagChooserWidget(), SLOT(tagToolRenameCurrentTag(const QString&)));
+    connect(d->tagToolButton, SIGNAL(undeletionOfTagRequested(KisTagSP)),
+            d->tagManager->tagChooserWidget(), SLOT(tagToolUndeleteLastTag(KisTagSP)));
+
+    // Keep external tagToolButton in sync with the tag chooser's current tag
+    connect(d->tagManager->tagChooserWidget(), SIGNAL(sigTagChosen(KisTagSP)),
+            this, SLOT(slotTagChanged(KisTagSP)));
 
     // Resource List View
     d->view = new KisResourceItemListView(this);
@@ -719,6 +742,7 @@ void KisResourceItemChooser::hideEverything()
     d->scroll_right->hide();
 
     d->viewModeButton->hide();
+    d->tagToolButton->hide();
 }
 
 void KisResourceItemChooser::applyVerticalLayout()
@@ -738,18 +762,27 @@ void KisResourceItemChooser::applyVerticalLayout()
     d->view->setItemSize(QSize(chooserSync->baseLength(), chooserSync->baseLength()));
 
     QGridLayout* thisLayout = dynamic_cast<QGridLayout*>(layout());
-    thisLayout->addWidget(d->tagManager->tagChooserWidget(), 0, 0);
-    thisLayout->addWidget(d->viewModeButton, 0, 1);
-    thisLayout->addWidget(d->storagePopupButton, 0, 2);
-    thisLayout->addWidget(d->resourcesSplitter, 1, 0, 1, 3);
-    thisLayout->setRowStretch(1, 1);
-    thisLayout->addWidget(d->tagManager->tagFilterWidget(), 2, 0, 1, 3);
-    thisLayout->addWidget(d->importExportBtns, 3, 0, 1, 3);
 
-    d->viewModeButton->setVisible(d->showViewModeBtn);
-    d->storagePopupButton->setVisible(d->showStoragePopupBtn);
+    // Row 0: Completely removed (top row is now empty)
+    // Row 1: Brush presets view (resources splitter)
+    thisLayout->addWidget(d->resourcesSplitter, 0, 0, 1, 3);
+    thisLayout->setRowStretch(0, 1);
 
+    // Row 2: Bottom bar with tag filter, tag tool button, and view mode button
+    thisLayout->addWidget(d->tagManager->tagFilterWidget(), 1, 0);
+    thisLayout->addWidget(d->tagToolButton, 1, 1);
+    thisLayout->addWidget(d->viewModeButton, 1, 2);
+
+    // Row 3: Import/Export buttons
+    thisLayout->addWidget(d->importExportBtns, 2, 0, 1, 3);
+
+    // Hide storage button completely (not in new layout)
+    d->storagePopupButton->setVisible(false);
+
+    // Show tag tool button and view mode button
+    d->tagToolButton->setVisible(true);
     d->viewModeButton->setVisible(d->showViewModeBtn);
+
     d->layout = Layout::Vertical;
 }
 
@@ -783,13 +816,12 @@ void KisResourceItemChooser::changeLayoutBasedOnSize()
             // Right Top
             d->top->addWidget(d->scroll_left);
             d->top->addWidget(d->scroll_right);
-            d->top->addWidget(d->tagManager->tagChooserWidget());
             d->top->addWidget(d->importExportBtns);
 
-            // Right Bot
-            d->bot->addWidget(d->viewModeButton);
-            d->bot->addWidget(d->storagePopupButton);
+            // Right Bot - Updated layout: tagFilter, tagToolButton, viewModeButton
             d->bot->addWidget(d->tagManager->tagFilterWidget());
+            d->bot->addWidget(d->tagToolButton);
+            d->bot->addWidget(d->viewModeButton);
 
             d->horzSplitter->addWidget(d->left);
             d->horzSplitter->addWidget(d->right2Rows);
@@ -800,8 +832,9 @@ void KisResourceItemChooser::changeLayoutBasedOnSize()
             thisLayout->setColumnStretch(0, 2);
             thisLayout->setRowStretch(1, 0);
 
-            d->viewModeButton->setVisible(false);
-            d->storagePopupButton->setVisible(d->showStoragePopupBtn);
+            d->viewModeButton->setVisible(d->showViewModeBtn);
+            d->tagToolButton->setVisible(true);
+            d->storagePopupButton->setVisible(false);
 
             const bool splitterRestored = d->restoreSplitterState(Layout::Horizontal2Rows);
 
@@ -834,10 +867,9 @@ void KisResourceItemChooser::changeLayoutBasedOnSize()
             leftLayout->addWidget(d->scroll_right);
 
             QLayout* rightLayout = d->right->layout();
-            rightLayout->addWidget(d->tagManager->tagChooserWidget());
-            rightLayout->addWidget(d->viewModeButton);
-            rightLayout->addWidget(d->storagePopupButton);
             rightLayout->addWidget(d->tagManager->tagFilterWidget());
+            rightLayout->addWidget(d->tagToolButton);
+            rightLayout->addWidget(d->viewModeButton);
             rightLayout->addWidget(d->importExportBtns);
 
             d->horzSplitter->addWidget(d->left);
@@ -849,8 +881,9 @@ void KisResourceItemChooser::changeLayoutBasedOnSize()
             thisLayout->setColumnStretch(0, 2);
             thisLayout->setRowStretch(1, 0);
 
-            d->viewModeButton->setVisible(false);
-            d->storagePopupButton->setVisible(d->showStoragePopupBtn);
+            d->viewModeButton->setVisible(d->showViewModeBtn);
+            d->tagToolButton->setVisible(true);
+            d->storagePopupButton->setVisible(false);
 
             const bool splitterRestored = d->restoreSplitterState(Layout::Horizontal1Row);
 
@@ -916,5 +949,13 @@ void KisResourceItemChooser::slotResourcesReordered(const QList<int> &resourceId
     // Forward the reorder request to the proxy model
     if (d->resourceType == ResourceType::PaintOpPresets) {
         d->tagFilterProxyModel->moveResources(resourceIds, targetItemId, insertAfter);
+    }
+}
+
+void KisResourceItemChooser::slotTagChanged(KisTagSP tag)
+{
+    // Update the external tag tool button when the tag changes
+    if (d->tagToolButton) {
+        d->tagToolButton->setCurrentTag(tag);
     }
 }
