@@ -19,6 +19,13 @@
 #include "kis_texture_option.h"
 #include <KoResourceCacheInterface.h>
 #include <KisOptimizedBrushOutline.h>
+#include <kis_config.h>
+#include <tool/kis_smoothing_options.h>
+#include <brushengine/kis_standard_uniform_properties_factory.h>
+#include <KoToolManager.h>
+#include <KoCanvasController.h>
+#include <tool/kis_tool.h>
+#include <QMetaObject>
 
 struct BrushReader {
     BrushReader(const KisBrushBasedPaintOpSettings *parent)
@@ -306,6 +313,93 @@ QList<KisUniformPaintOpPropertySP> KisBrushBasedPaintOpSettings::uniformProperti
                 });
 
             QObject::connect(updateProxy, SIGNAL(sigSettingsChanged()), prop, SLOT(requestReadValue()));
+            prop->requestReadValue();
+            props << toQShared(prop);
+        }
+
+        {
+            // Smoothing is a global tool setting
+            using namespace KisStandardUniformPropertiesFactory;
+
+            KisDoubleSliderBasedPaintOpPropertyCallback *prop =
+                new KisDoubleSliderBasedPaintOpPropertyCallback(KisDoubleSliderBasedPaintOpPropertyCallback::Double,
+                                                                smoothing,
+                                                                settings,
+                                                                0);
+
+            prop->setRange(0, 100);
+            prop->setSingleStep(1);
+
+            prop->setReadCallback(
+                [](KisUniformPaintOpProperty *prop) {
+                    // Read smoothing value from global config
+                    // This mirrors the logic in kis_paintop_box.cc
+                    KisConfig cfg(true);
+                    int smoothingType = cfg.lineSmoothingType();
+                    int smoothingValue = 0;
+                    if (smoothingType == KisSmoothingOptions::STABILIZER) {
+                        int sampleCount = static_cast<int>(cfg.lineSmoothingDistance());
+                        // Convert sample count (3-100) to slider value (1-100)
+                        smoothingValue = 1 + (sampleCount - 3) * 99 / 97;
+                        smoothingValue = qBound(1, smoothingValue, 100);
+                    }
+                    prop->setValue(smoothingValue);
+                });
+            prop->setWriteCallback(
+                [](KisUniformPaintOpProperty *prop) {
+                    // Write smoothing value to global config
+                    // This mirrors the logic in kis_paintop_box.cc
+                    KisConfig cfg(false);
+                    int smoothing = static_cast<int>(prop->value().toReal());
+
+                    const bool useStabilizer = smoothing > 0;
+                    int sampleCount = 3;
+                    if (smoothing == 0) {
+                        cfg.setLineSmoothingType(KisSmoothingOptions::NO_SMOOTHING);
+                    } else {
+                        cfg.setLineSmoothingType(KisSmoothingOptions::STABILIZER);
+                        // Convert slider value (1-100) to sample count (3-100)
+                        sampleCount = 3 + (smoothing - 1) * 97 / 99;
+                        cfg.setLineSmoothingDistance(sampleCount);
+                    }
+
+                    // Notify the active tool to reload smoothing settings
+                    // This is necessary because tools cache these settings
+                    KoCanvasController *canvasController = KoToolManager::instance()->activeCanvasController();
+                    if (canvasController) {
+                        KoCanvasBase *canvasBase = canvasController->canvas();
+                        if (canvasBase) {
+                            const QString toolId = KoToolManager::instance()->activeToolId();
+                            KisTool *tool = dynamic_cast<KisTool*>(
+                                KoToolManager::instance()->toolById(canvasBase, toolId));
+                            if (tool) {
+                                const int smoothingType = useStabilizer
+                                    ? KisSmoothingOptions::STABILIZER
+                                    : KisSmoothingOptions::NO_SMOOTHING;
+
+                                const bool appliedType = QMetaObject::invokeMethod(
+                                    tool,
+                                    "slotSetSmoothingType",
+                                    Qt::DirectConnection,
+                                    Q_ARG(int, smoothingType));
+
+                                bool appliedDistance = false;
+                                if (useStabilizer) {
+                                    appliedDistance = QMetaObject::invokeMethod(
+                                        tool,
+                                        "slotSetSmoothnessDistance",
+                                        Qt::DirectConnection,
+                                        Q_ARG(qreal, static_cast<qreal>(sampleCount)));
+                                }
+
+                                if (appliedType || appliedDistance) {
+                                    tool->updateSettingsViews();
+                                }
+                            }
+                        }
+                    }
+                });
+
             prop->requestReadValue();
             props << toQShared(prop);
         }

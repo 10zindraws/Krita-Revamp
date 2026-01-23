@@ -20,6 +20,7 @@ static const KoID opacity("opacity", ki18n("Opacity"));
 static const KoID flow("flow", ki18n("Flow"));
 static const KoID angle("angle", ki18n("Angle"));
 static const KoID spacing("spacing", ki18n("Spacing"));
+static const KoID smoothing("smoothing", ki18n("Smoothing"));
 
 
 /**
@@ -31,7 +32,7 @@ KisUniformPaintOpPropertySP createProperty(const KoID &id,
 
 /**
      * Factory for creating standard uniform properties. Right now
-     * it supports only size, opacity and flow.
+     * it supports size, opacity, flow, and smoothing.
      */
 KisUniformPaintOpPropertySP createProperty(const QString &id,
                                            KisPaintOpSettingsRestrictedSP settings,

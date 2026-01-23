@@ -93,6 +93,10 @@ KisUniformPaintOpPropertySP createProperty(const QString &id,
         qFatal("Not implemented");
     } else if (id == spacing.id()) {
         qFatal("Not implemented");
+    } else if (id == smoothing.id()) {
+        // Smoothing is implemented in kis_brush_based_paintop_settings.cpp
+        // because it requires access to KisConfig (UI layer)
+        qFatal("Not implemented");
     }
 
     if (!result) {
