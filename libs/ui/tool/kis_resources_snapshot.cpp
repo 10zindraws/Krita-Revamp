@@ -132,7 +132,11 @@ KisResourcesSnapshot::KisResourcesSnapshot(KisImageSP image, KisNodeSP currentNo
 
     m_d->opacity = resourceManager->resource(KoCanvasResource::Opacity).toDouble();
 
-    m_d->compositeOpId = resourceManager->resource(KoCanvasResource::CurrentEffectiveCompositeOp).toString();
+    if (presetOverride && presetOverride->settings()) {
+        m_d->compositeOpId = presetOverride->settings()->effectivePaintOpCompositeOp();
+    } else {
+        m_d->compositeOpId = resourceManager->resource(KoCanvasResource::CurrentEffectiveCompositeOp).toString();
+    }
     setCurrentNode(currentNode);
 
     m_d->selectedNodes = selectedNodes;

@@ -30,7 +30,7 @@
 
 static bool needsBlendingModeOverride(const QString &compositeOp)
 {
-    //Brush presets with Erase blending mode have blank stroke previews without this
+    // Brush presets with eraser composite mode have blank stroke previews without this.
     static const QSet<QString> invisibleModes = {COMPOSITE_ERASE};
     return invisibleModes.contains(compositeOp);
 }
@@ -292,8 +292,9 @@ void KisPresetLivePreviewView::setupAndPaintStroke()
     KisPaintOpSettingsSP settings = proxy_preset->settings();
     settings->setPaintOpSize(previewSize);
 
-    const QString compositeOp = settings->paintOpCompositeOp();
+    const QString compositeOp = settings->effectivePaintOpCompositeOp();
     if (needsBlendingModeOverride(compositeOp)) {
+        settings->setEraserMode(false);
         settings->setPaintOpCompositeOp(COMPOSITE_OVER);
     }
 
