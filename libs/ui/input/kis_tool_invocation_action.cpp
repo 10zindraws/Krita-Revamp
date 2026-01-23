@@ -122,7 +122,7 @@ void KisToolInvocationAction::activate(int shortcut)
     }
 
     if (!temporaryToolId.isEmpty()) {
-        KoToolManager::instance()->switchToolRequested(temporaryToolId);
+        KoToolManager::instance()->switchToolTemporaryRequested(temporaryToolId);
         d->temporaryToolActivated = true;
     }
 

@@ -260,7 +260,19 @@ void KoToolManager::attemptCanvasControllerRemoval(QObject* controller)
 
 void KoToolManager::switchToolRequested(const QString & id)
 {
+    d->temporaryToolActive = false;
     d->switchTool(id);
+}
+
+void KoToolManager::switchToolTemporaryRequested(const QString & id)
+{
+    d->temporaryToolActive = true;
+    d->switchTool(id);
+}
+
+bool KoToolManager::isTemporaryToolActive() const
+{
+    return d->temporaryToolActive;
 }
 
 void KoToolManager::switchInputDeviceRequested(const KoInputDevice &id)
@@ -273,6 +285,7 @@ void KoToolManager::switchBackRequested()
 {
     if (!d->canvasData) return;
     if (d->canvasData->mostRecentTools.isEmpty()) return;
+    d->temporaryToolActive = false;
     d->switchTool(d->canvasData->mostRecentTools.first()->toolId());
 }
 

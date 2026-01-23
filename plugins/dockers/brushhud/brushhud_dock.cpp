@@ -107,12 +107,22 @@ void BrushHudDock::unsetCanvas()
 
 void BrushHudDock::slotToolChanged()
 {
+    // Ignore temporary tool changes from Canvas Input shortcuts
+    if (KoToolManager::instance()->isTemporaryToolActive()) {
+        return;
+    }
     updateDockerContent();
 }
 
 void BrushHudDock::slotToolOptionWidgetsChanged(KoCanvasController *controller, const QList<QPointer<QWidget> > &widgets)
 {
     if (!m_canvas || !m_canvas->canvasController() || m_canvas->canvasController() != controller) {
+        return;
+    }
+
+    // Ignore temporary tool changes from Canvas Input shortcuts
+    // This prevents temporary tool invocations (like Shift for Line Tool) from affecting the docker
+    if (KoToolManager::instance()->isTemporaryToolActive()) {
         return;
     }
 
@@ -142,6 +152,11 @@ void BrushHudDock::slotToolOptionWidgetsChanged(KoCanvasController *controller, 
 
     // Update the docker content
     updateDockerContent();
+
+    // Pass tool option widgets to the Brush HUD for freehand brush tools
+    if (m_brushHud && isFreehandBrushTool()) {
+        m_brushHud->setToolOptionWidgets(widgets);
+    }
 }
 
 bool BrushHudDock::isFreehandBrushTool() const

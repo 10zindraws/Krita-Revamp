@@ -206,12 +206,25 @@ public:
      */
     KoToolManager::Private *priv();
 
+    /**
+     * Returns true if the current tool was activated temporarily via Canvas Input shortcuts.
+     * Dockers should ignore tool changes when this returns true.
+     */
+    bool isTemporaryToolActive() const;
+
 public Q_SLOTS:
     /**
      * Request switching tool
      * @param id the id of the tool
      */
     void switchToolRequested(const QString &id);
+
+    /**
+     * Request temporarily switching to a tool (via Canvas Input shortcuts).
+     * The tool will be switched back when switchBackRequested() is called.
+     * @param id the id of the tool
+     */
+    void switchToolTemporaryRequested(const QString &id);
 
     /**
      * Request change input device

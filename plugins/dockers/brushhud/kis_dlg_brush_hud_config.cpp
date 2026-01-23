@@ -13,6 +13,7 @@
 #include "kis_brush_hud_properties_config.h"
 
 #include <kstandardguiitem.h>
+#include <klocalizedstring.h>
 
 
 struct KisDlgConfigureBrushHud::Private
@@ -43,6 +44,15 @@ KisDlgConfigureBrushHud::KisDlgConfigureBrushHud(KisPaintOpPresetSP preset, QWid
 
     ui->lstAvailable->addProperties(available);
     ui->lstCurrent->addProperties(chosen);
+
+    // Add tool-level options (like Snap to Assistants)
+    const QString snapToAssistantsId = "tool://snap_to_assistants";
+    QList<QString> selectedIds = cfg.selectedProperties(preset->paintOp().id());
+    if (selectedIds.contains(snapToAssistantsId)) {
+        ui->lstCurrent->addToolOptionItem(snapToAssistantsId, i18n("Snap to Assistants"));
+    } else {
+        ui->lstAvailable->addToolOptionItem(snapToAssistantsId, i18n("Snap to Assistants"));
+    }
 
     connect(this, SIGNAL(accepted()), SLOT(slotConfigAccepted()));
 

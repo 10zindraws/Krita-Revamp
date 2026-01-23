@@ -9,8 +9,11 @@
 
 #include <QScopedPointer>
 #include <QWidget>
+#include <QPointer>
+#include <QList>
 
 class KisCanvasResourceProvider;
+class QCheckBox;
 
 class KisBrushHud : public QWidget
 {
@@ -20,6 +23,7 @@ public:
     ~KisBrushHud() override;
 
     void updateProperties();
+    void setToolOptionWidgets(const QList<QPointer<QWidget>> &widgets);
 
     void updateIcons();
 
@@ -38,6 +42,10 @@ private Q_SLOTS:
 
 private:
     void clearProperties() const;
+
+private:
+    void updateToolOptionWidgets();
+    QCheckBox* findSnapToAssistantsCheckBox();
 
 private:
     struct Private;

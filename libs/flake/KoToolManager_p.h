@@ -83,6 +83,7 @@ public:
     KoInputDevice inputDevice;
 
     bool layerExplicitlyDisabled;
+    bool temporaryToolActive {false}; // Track if current tool is temporarily activated via Canvas Input
 };
 
 /// \internal

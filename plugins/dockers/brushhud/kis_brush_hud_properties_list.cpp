@@ -34,6 +34,13 @@ void KisBrushHudPropertiesList::addProperties(const QList<KisUniformPaintOpPrope
     }
 }
 
+void KisBrushHudPropertiesList::addToolOptionItem(const QString &id, const QString &name)
+{
+    QListWidgetItem *item = new QListWidgetItem(name, this);
+    item->setData(Qt::UserRole, id);
+    addItem(item);
+}
+
 QList<QString> KisBrushHudPropertiesList::selectedPropertiesIds() const
 {
     QList<QString> ids;

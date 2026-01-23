@@ -19,6 +19,7 @@ public:
     ~KisBrushHudPropertiesList() override;
 
     void addProperties(const QList<KisUniformPaintOpPropertySP> &properties);
+    void addToolOptionItem(const QString &id, const QString &name);
     QList<QString> selectedPropertiesIds() const;
 
     Qt::DropActions supportedDropActions() const override;

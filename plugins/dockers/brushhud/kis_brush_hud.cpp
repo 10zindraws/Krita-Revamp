@@ -17,6 +17,7 @@
 #include <QEvent>
 #include <QToolButton>
 #include <QAction>
+#include <QCheckBox>
 
 #include "kis_uniform_paintop_property.h"
 #include "kis_slider_based_paintop_property.h"
@@ -34,6 +35,8 @@
 #include "kis_canvas2.h"
 #include "KisViewManager.h"
 #include "kactioncollection.h"
+#include "KoToolManager.h"
+#include "tool/kis_tool_freehand.h"
 
 #include "kis_debug.h"
 
@@ -54,6 +57,10 @@ struct KisBrushHud::Private
     KisSignalAutoConnectionsStore presetConnections;
 
     KisPaintOpPresetSP currentPreset;
+
+    QPointer<QCheckBox> snapToAssistantsCheckbox;
+    bool showSnapToAssistants = true; // Whether to show the checkbox
+    QList<QPointer<QWidget>> toolOptionWidgets; // Store the current tool option widgets
 };
 
 KisBrushHud::KisBrushHud(KisCanvasResourceProvider *provider, QWidget *parent)
@@ -220,6 +227,12 @@ void KisBrushHud::updateProperties()
         }
     }
 
+    // Add tool-level widgets (like Snap to Assistants)
+    updateToolOptionWidgets();
+    if (!m_d->snapToAssistantsCheckbox.isNull()) {
+        m_d->propertiesLayout->addWidget(m_d->snapToAssistantsCheckbox);
+    }
+
     m_d->propertiesLayout->addStretch();
 }
 
@@ -311,4 +324,80 @@ void KisBrushHud::slotReloadPreset()
     KisCanvas2* canvas = dynamic_cast<KisCanvas2*>(m_d->provider->canvas());
     KIS_ASSERT_RECOVER_RETURN(canvas);
     canvas->viewManager()->actionCollection()->action("reload_preset_action")->trigger();
+}
+
+QCheckBox* KisBrushHud::findSnapToAssistantsCheckBox()
+{
+    // Search for a checkbox with the text "Snap to Assistants" in the stored tool option widgets
+    for (QPointer<QWidget> widget : m_d->toolOptionWidgets) {
+        if (!widget.isNull()) {
+            QCheckBox *checkbox = qobject_cast<QCheckBox*>(widget.data());
+            if (checkbox && checkbox->text() == i18n("Snap to Assistants")) {
+                return checkbox;
+            }
+
+            // Also search children in case the checkbox is nested
+            QList<QCheckBox*> checkboxes = widget->findChildren<QCheckBox*>();
+            for (QCheckBox *checkbox : checkboxes) {
+                if (checkbox->text() == i18n("Snap to Assistants")) {
+                    return checkbox;
+                }
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+void KisBrushHud::setToolOptionWidgets(const QList<QPointer<QWidget>> &widgets)
+{
+    m_d->toolOptionWidgets = widgets;
+    // Refresh the tool option widgets display if we have a current preset
+    if (m_d->currentPreset && m_d->propertiesLayout) {
+        updateToolOptionWidgets();
+        if (!m_d->snapToAssistantsCheckbox.isNull()) {
+            // Remove and re-add to ensure proper positioning (before the stretch)
+            m_d->propertiesLayout->removeWidget(m_d->snapToAssistantsCheckbox);
+            m_d->propertiesLayout->insertWidget(m_d->propertiesLayout->count() - 1, m_d->snapToAssistantsCheckbox);
+        }
+    }
+}
+
+void KisBrushHud::updateToolOptionWidgets()
+{
+    // Clean up previous tool option widgets from our layout
+    if (!m_d->snapToAssistantsCheckbox.isNull()) {
+        m_d->propertiesLayout->removeWidget(m_d->snapToAssistantsCheckbox);
+        // Properly delete the checkbox to prevent it from becoming an orphaned top-level window
+        m_d->snapToAssistantsCheckbox->deleteLater();
+        m_d->snapToAssistantsCheckbox = nullptr;
+    }
+
+    // Check config to see if Snap to Assistants should be shown
+    if (m_d->currentPreset) {
+        KisBrushHudPropertiesConfig cfg;
+        QList<QString> selectedIds = cfg.selectedProperties(m_d->currentPreset->paintOp().id());
+        const QString snapToAssistantsId = "tool://snap_to_assistants";
+        m_d->showSnapToAssistants = selectedIds.contains(snapToAssistantsId);
+    }
+
+    // Check if we should show the Snap to Assistants option
+    if (!m_d->showSnapToAssistants) {
+        return;
+    }
+
+    // Try to find the Snap to Assistants checkbox from the tool
+    QCheckBox *originalCheckbox = findSnapToAssistantsCheckBox();
+    if (originalCheckbox) {
+        // Create our own checkbox that mirrors the original
+        m_d->snapToAssistantsCheckbox = new QCheckBox(m_d->wdgProperties);
+        m_d->snapToAssistantsCheckbox->setText(i18n("Snap to Assistants"));
+        m_d->snapToAssistantsCheckbox->setChecked(originalCheckbox->isChecked());
+
+        // Connect the two checkboxes to stay in sync
+        connect(m_d->snapToAssistantsCheckbox, &QCheckBox::toggled, originalCheckbox, &QCheckBox::setChecked);
+        connect(originalCheckbox, &QCheckBox::toggled, m_d->snapToAssistantsCheckbox.data(), &QCheckBox::setChecked);
+
+        m_d->snapToAssistantsCheckbox->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+    }
 }
