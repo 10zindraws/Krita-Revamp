@@ -24,7 +24,7 @@
 
 
 BrushHudDock::BrushHudDock( )
-    : QDockWidget(i18nc("@title:window On-Canvas Brush Editor docker", "On-Canvas Brush Editor"))
+    : QDockWidget(i18nc("@title:window Tool Options docker", "Tool Options"))
     , m_canvas(0)
     , m_brushHud(0)
     , m_stackedWidget(0)
