@@ -18,6 +18,8 @@
 #include <QToolButton>
 #include <QAction>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QGridLayout>
 
 #include "kis_uniform_paintop_property.h"
 #include "kis_slider_based_paintop_property.h"
@@ -57,6 +59,10 @@ struct KisBrushHud::Private
     KisSignalAutoConnectionsStore presetConnections;
 
     KisPaintOpPresetSP currentPreset;
+
+    QPointer<QWidget> brushSmoothingWidget;
+    QPointer<QComboBox> brushSmoothingCombo;
+    bool showBrushSmoothing = true; // Whether to show the smoothing widget
 
     QPointer<QCheckBox> snapToAssistantsCheckbox;
     bool showSnapToAssistants = true; // Whether to show the checkbox
@@ -227,12 +233,9 @@ void KisBrushHud::updateProperties()
         }
     }
 
-    // Add tool-level widgets (like Snap to Assistants)
+    // Add tool-level widgets (like Brush Smoothing and Snap to Assistants)
     updateToolOptionWidgets();
-    if (!m_d->snapToAssistantsCheckbox.isNull()) {
-        m_d->propertiesLayout->addWidget(m_d->snapToAssistantsCheckbox);
-    }
-
+    insertToolOptionWidgets();
     m_d->propertiesLayout->addStretch();
 }
 
@@ -349,23 +352,70 @@ QCheckBox* KisBrushHud::findSnapToAssistantsCheckBox()
     return nullptr;
 }
 
+QComboBox* KisBrushHud::findBrushSmoothingComboBox()
+{
+    const QString smoothingLabel = i18n("Brush Smoothing:");
+
+    for (QPointer<QWidget> widget : m_d->toolOptionWidgets) {
+        if (widget.isNull()) {
+            continue;
+        }
+
+        const QList<QLabel*> labels = widget->findChildren<QLabel*>();
+        for (QLabel *label : labels) {
+            if (label->text() != smoothingLabel) {
+                continue;
+            }
+
+            const QList<QGridLayout*> layouts = widget->findChildren<QGridLayout*>();
+            for (QGridLayout *layout : layouts) {
+                const int index = layout->indexOf(label);
+                if (index < 0) {
+                    continue;
+                }
+
+                int row = 0;
+                int col = 0;
+                int rowSpan = 0;
+                int colSpan = 0;
+                layout->getItemPosition(index, &row, &col, &rowSpan, &colSpan);
+
+                QLayoutItem *item = layout->itemAtPosition(row, col + 1);
+                if (!item) {
+                    item = layout->itemAtPosition(row, col - 1);
+                }
+
+                if (item) {
+                    if (QComboBox *combo = qobject_cast<QComboBox*>(item->widget())) {
+                        return combo;
+                    }
+                }
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 void KisBrushHud::setToolOptionWidgets(const QList<QPointer<QWidget>> &widgets)
 {
     m_d->toolOptionWidgets = widgets;
     // Refresh the tool option widgets display if we have a current preset
     if (m_d->currentPreset && m_d->propertiesLayout) {
         updateToolOptionWidgets();
-        if (!m_d->snapToAssistantsCheckbox.isNull()) {
-            // Remove and re-add to ensure proper positioning (before the stretch)
-            m_d->propertiesLayout->removeWidget(m_d->snapToAssistantsCheckbox);
-            m_d->propertiesLayout->insertWidget(m_d->propertiesLayout->count() - 1, m_d->snapToAssistantsCheckbox);
-        }
+        insertToolOptionWidgets();
     }
 }
 
 void KisBrushHud::updateToolOptionWidgets()
 {
     // Clean up previous tool option widgets from our layout
+    if (!m_d->brushSmoothingWidget.isNull()) {
+        m_d->propertiesLayout->removeWidget(m_d->brushSmoothingWidget);
+        m_d->brushSmoothingWidget->deleteLater();
+        m_d->brushSmoothingWidget = nullptr;
+        m_d->brushSmoothingCombo = nullptr;
+    }
     if (!m_d->snapToAssistantsCheckbox.isNull()) {
         m_d->propertiesLayout->removeWidget(m_d->snapToAssistantsCheckbox);
         // Properly delete the checkbox to prevent it from becoming an orphaned top-level window
@@ -373,31 +423,88 @@ void KisBrushHud::updateToolOptionWidgets()
         m_d->snapToAssistantsCheckbox = nullptr;
     }
 
-    // Check config to see if Snap to Assistants should be shown
+    m_d->showBrushSmoothing = false;
+    m_d->showSnapToAssistants = false;
+
+    // Check config to see if tool options should be shown
     if (m_d->currentPreset) {
         KisBrushHudPropertiesConfig cfg;
         QList<QString> selectedIds = cfg.selectedProperties(m_d->currentPreset->paintOp().id());
+        const QString brushSmoothingId = "tool://brush_smoothing";
         const QString snapToAssistantsId = "tool://snap_to_assistants";
+        m_d->showBrushSmoothing = selectedIds.contains(brushSmoothingId);
         m_d->showSnapToAssistants = selectedIds.contains(snapToAssistantsId);
     }
 
-    // Check if we should show the Snap to Assistants option
-    if (!m_d->showSnapToAssistants) {
-        return;
+    // Brush Smoothing combo box
+    if (m_d->showBrushSmoothing) {
+        QComboBox *originalCombo = findBrushSmoothingComboBox();
+        if (originalCombo) {
+            QWidget *container = new QWidget(m_d->wdgProperties);
+            QHBoxLayout *layout = new QHBoxLayout(container);
+            layout->setContentsMargins(0, 0, 0, 0);
+            layout->setSpacing(4);
+
+            QLabel *label = new QLabel(i18n("Brush Smoothing:"), container);
+            label->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+
+            QComboBox *combo = new QComboBox(container);
+            combo->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+            for (int i = 0; i < originalCombo->count(); ++i) {
+                combo->addItem(originalCombo->itemIcon(i), originalCombo->itemText(i));
+            }
+            combo->setCurrentIndex(originalCombo->currentIndex());
+
+            connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                    originalCombo, &QComboBox::setCurrentIndex);
+            connect(originalCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                    combo, &QComboBox::setCurrentIndex);
+
+            layout->addWidget(label);
+            layout->addWidget(combo);
+
+            container->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+            m_d->brushSmoothingWidget = container;
+            m_d->brushSmoothingCombo = combo;
+        }
     }
 
     // Try to find the Snap to Assistants checkbox from the tool
-    QCheckBox *originalCheckbox = findSnapToAssistantsCheckBox();
-    if (originalCheckbox) {
-        // Create our own checkbox that mirrors the original
-        m_d->snapToAssistantsCheckbox = new QCheckBox(m_d->wdgProperties);
-        m_d->snapToAssistantsCheckbox->setText(i18n("Snap to Assistants"));
-        m_d->snapToAssistantsCheckbox->setChecked(originalCheckbox->isChecked());
+    if (m_d->showSnapToAssistants) {
+        QCheckBox *originalCheckbox = findSnapToAssistantsCheckBox();
+        if (originalCheckbox) {
+            // Create our own checkbox that mirrors the original
+            m_d->snapToAssistantsCheckbox = new QCheckBox(m_d->wdgProperties);
+            m_d->snapToAssistantsCheckbox->setText(i18n("Snap to Assistants"));
+            m_d->snapToAssistantsCheckbox->setChecked(originalCheckbox->isChecked());
 
-        // Connect the two checkboxes to stay in sync
-        connect(m_d->snapToAssistantsCheckbox, &QCheckBox::toggled, originalCheckbox, &QCheckBox::setChecked);
-        connect(originalCheckbox, &QCheckBox::toggled, m_d->snapToAssistantsCheckbox.data(), &QCheckBox::setChecked);
+            // Connect the two checkboxes to stay in sync
+            connect(m_d->snapToAssistantsCheckbox, &QCheckBox::toggled, originalCheckbox, &QCheckBox::setChecked);
+            connect(originalCheckbox, &QCheckBox::toggled, m_d->snapToAssistantsCheckbox.data(), &QCheckBox::setChecked);
 
-        m_d->snapToAssistantsCheckbox->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+            m_d->snapToAssistantsCheckbox->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+        }
+    }
+}
+
+void KisBrushHud::insertToolOptionWidgets()
+{
+    if (!m_d->propertiesLayout) {
+        return;
+    }
+
+    int insertPosition = m_d->propertiesLayout->count();
+    if (insertPosition > 0) {
+        QLayoutItem *lastItem = m_d->propertiesLayout->itemAt(insertPosition - 1);
+        if (lastItem && lastItem->spacerItem()) {
+            insertPosition -= 1;
+        }
+    }
+
+    if (!m_d->brushSmoothingWidget.isNull()) {
+        m_d->propertiesLayout->insertWidget(insertPosition++, m_d->brushSmoothingWidget);
+    }
+    if (!m_d->snapToAssistantsCheckbox.isNull()) {
+        m_d->propertiesLayout->insertWidget(insertPosition++, m_d->snapToAssistantsCheckbox);
     }
 }

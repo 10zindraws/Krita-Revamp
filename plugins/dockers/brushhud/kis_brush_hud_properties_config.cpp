@@ -107,6 +107,10 @@ void KisBrushHudPropertiesConfig::filterProperties(
     *skippedProperties = allProperties;
 
     Q_FOREACH (const QString &id, selectedIds) {
+        if (id.startsWith(QLatin1String("tool://"))) {
+            continue;
+        }
+
         auto it = std::find_if(skippedProperties->begin(),
                                skippedProperties->end(),
                                kismpl::mem_equal_to(&KisUniformPaintOpProperty::id, id));
@@ -116,7 +120,6 @@ void KisBrushHudPropertiesConfig::filterProperties(
             it = skippedProperties->erase(it);
         } else {
             warnKrita << "Filtering HUD properties: property \"" << id << "\" does not exist!";
-            ++it;
         }
     }
 }

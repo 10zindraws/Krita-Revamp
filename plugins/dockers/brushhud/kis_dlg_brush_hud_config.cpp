@@ -45,9 +45,15 @@ KisDlgConfigureBrushHud::KisDlgConfigureBrushHud(KisPaintOpPresetSP preset, QWid
     ui->lstAvailable->addProperties(available);
     ui->lstCurrent->addProperties(chosen);
 
-    // Add tool-level options (like Snap to Assistants)
+    // Add tool-level options (like Brush Smoothing and Snap to Assistants)
+    const QString brushSmoothingId = "tool://brush_smoothing";
     const QString snapToAssistantsId = "tool://snap_to_assistants";
     QList<QString> selectedIds = cfg.selectedProperties(preset->paintOp().id());
+    if (selectedIds.contains(brushSmoothingId)) {
+        ui->lstCurrent->addToolOptionItem(brushSmoothingId, i18n("Brush Smoothing"));
+    } else {
+        ui->lstAvailable->addToolOptionItem(brushSmoothingId, i18n("Brush Smoothing"));
+    }
     if (selectedIds.contains(snapToAssistantsId)) {
         ui->lstCurrent->addToolOptionItem(snapToAssistantsId, i18n("Snap to Assistants"));
     } else {

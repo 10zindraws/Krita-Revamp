@@ -14,6 +14,7 @@
 
 class KisCanvasResourceProvider;
 class QCheckBox;
+class QComboBox;
 
 class KisBrushHud : public QWidget
 {
@@ -46,6 +47,8 @@ private:
 private:
     void updateToolOptionWidgets();
     QCheckBox* findSnapToAssistantsCheckBox();
+    QComboBox* findBrushSmoothingComboBox();
+    void insertToolOptionWidgets();
 
 private:
     struct Private;
