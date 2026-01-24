@@ -193,6 +193,7 @@ KisResourceItemChooser::KisResourceItemChooser(const QString &resourceType, bool
 
     connect(d->view, SIGNAL(currentResourceChanged(QModelIndex)), this, SLOT(activate(QModelIndex)));
     connect(d->view, SIGNAL(currentResourceClicked(QModelIndex)), this, SLOT(clicked(QModelIndex)));
+    connect(d->view, SIGNAL(currentResourceDoubleClicked(QModelIndex)), this, SLOT(doubleClicked(QModelIndex)));
     connect(d->view, SIGNAL(contextMenuRequested(QPoint)), this, SLOT(contextMenuRequested(QPoint)));
     connect(d->view, SIGNAL(sigSizeChanged()), this, SLOT(updateView()));
 
@@ -559,6 +560,16 @@ void KisResourceItemChooser::clicked(const QModelIndex &index)
     KoResourceSP resource = currentResource();
     if (resource) {
         Q_EMIT resourceClicked(resource);
+    }
+}
+
+void KisResourceItemChooser::doubleClicked(const QModelIndex &index)
+{
+    Q_UNUSED(index);
+
+    KoResourceSP resource = currentResource();
+    if (resource) {
+        Q_EMIT resourceDoubleClicked(resource);
     }
 }
 

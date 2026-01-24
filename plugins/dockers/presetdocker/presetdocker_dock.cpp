@@ -7,8 +7,10 @@
 #include "presetdocker_dock.h"
 
 #include <QHBoxLayout>
+#include <QAction>
 
 #include <klocalizedstring.h>
+#include <kactioncollection.h>
 
 #include <KoCanvasResourceProvider.h>
 #include <KoCanvasBase.h>
@@ -48,6 +50,8 @@ void PresetDockerDock::setCanvas(KoCanvasBase *canvas)
             m_canvas->viewManager()->paintOpBox(), SLOT(resourceSelected(KoResourceSP )));
     connect(m_presetChooser, SIGNAL(resourceClicked(KoResourceSP )),
             m_canvas->viewManager()->paintOpBox(), SLOT(resourceSelected(KoResourceSP )));
+    connect(m_presetChooser, SIGNAL(resourceDoubleClicked(KoResourceSP )),
+            this, SLOT(slotResourceDoubleClicked(KoResourceSP )));
     connect(canvas->resourceManager(), SIGNAL(canvasResourceChanged(int,QVariant)),
             this, SLOT(canvasResourceChanged(int,QVariant)));
 
@@ -67,6 +71,17 @@ void PresetDockerDock::canvasResourceChanged(int key, const QVariant& /*v*/)
             if(preset)
                 m_presetChooser->canvasResourceChanged(preset);
             if (sender()) sender()->blockSignals(false);
+        }
+    }
+}
+
+void PresetDockerDock::slotResourceDoubleClicked(KoResourceSP resource)
+{
+    Q_UNUSED(resource);
+    if (m_canvas && m_canvas->viewManager()) {
+        QAction* action = m_canvas->viewManager()->actionCollection()->action("show_brush_editor");
+        if (action) {
+            action->trigger();
         }
     }
 }

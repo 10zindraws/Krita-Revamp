@@ -338,7 +338,7 @@ void KisResourceItemListView::mouseMoveEvent(QMouseEvent *event)
 
     // Start drag - don't call parent's mouseMoveEvent to prevent rubber band
     if (!m_d->isDragging) {
-        startDrag();
+        startReorderDrag();
     }
     // Note: We explicitly don't call QListView::mouseMoveEvent here
     // to prevent rubber band selection interference
@@ -351,7 +351,7 @@ void KisResourceItemListView::mouseReleaseEvent(QMouseEvent *event)
     QModelIndex clickedIndex = m_d->dragStartIndex;
 
     if (m_d->isDragging) {
-        stopDrag();
+        stopReorderDrag();
     }
 
     // Reset drag state
@@ -375,7 +375,16 @@ void KisResourceItemListView::mouseReleaseEvent(QMouseEvent *event)
     QListView::mouseReleaseEvent(event);
 }
 
-void KisResourceItemListView::startDrag()
+void KisResourceItemListView::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    QModelIndex index = indexAt(event->pos());
+    if (index.isValid()) {
+        Q_EMIT currentResourceDoubleClicked(index);
+    }
+    QListView::mouseDoubleClickEvent(event);
+}
+
+void KisResourceItemListView::startReorderDrag()
 {
     m_d->isDragging = true;
     m_d->potentialDrag = false;  // We're now actually dragging
@@ -392,7 +401,7 @@ void KisResourceItemListView::startDrag()
     }
 
     if (resourceIds.isEmpty()) {
-        stopDrag();
+        stopReorderDrag();
         return;
     }
 
@@ -429,10 +438,10 @@ void KisResourceItemListView::startDrag()
     // Execute drag - this blocks until drop or cancel
     drag->exec(Qt::MoveAction);
 
-    stopDrag();
+    stopReorderDrag();
 }
 
-void KisResourceItemListView::stopDrag()
+void KisResourceItemListView::stopReorderDrag()
 {
     m_d->isDragging = false;
     m_d->potentialDrag = false;

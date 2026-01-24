@@ -79,6 +79,7 @@ Q_SIGNALS:
 
     void currentResourceChanged(const QModelIndex &);
     void currentResourceClicked(const QModelIndex &);
+    void currentResourceDoubleClicked(const QModelIndex &);
 
     void contextMenuRequested(const QPoint &);
 
@@ -104,6 +105,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dragLeaveEvent(QDragLeaveEvent *event) override;
@@ -123,8 +125,8 @@ private:
         DropAfter      // Right/bottom edge zone
     };
 
-    void startDrag();
-    void stopDrag();
+    void startReorderDrag();
+    void stopReorderDrag();
     int calculateDropPosition(const QPoint &pos) const;
     DropZone getDropZone(const QPoint &pos, const QModelIndex &index) const;
     bool isSingleColumnLayout() const;

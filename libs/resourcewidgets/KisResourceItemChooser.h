@@ -148,6 +148,9 @@ Q_SIGNALS:
     /// again
     void resourceClicked(KoResourceSP resource);
 
+    /// Emitted when a resource is double-clicked
+    void resourceDoubleClicked(KoResourceSP resource);
+
 public Q_SLOTS:
     void slotButtonClicked(int button);
     void slotScrollerStateChanged(QScroller::State state){ KisKineticScroller::updateCursor(this, state); }
@@ -158,6 +161,7 @@ private Q_SLOTS:
     void scrollForwards();
     void activate(const QModelIndex &index);
     void clicked(const QModelIndex &index);
+    void doubleClicked(const QModelIndex &index);
     void contextMenuRequested(const QPoint &pos);
     void baseLengthChanged(int length);
     void afterFilterChanged();

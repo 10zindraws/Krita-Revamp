@@ -93,6 +93,8 @@ KisPaintOpPresetsChooserPopup::KisPaintOpPresetsChooserPopup(QWidget * parent)
             this, SIGNAL(resourceSelected(KoResourceSP )));
     connect(m_d->uiWdgPaintOpPresets.wdgPresetChooser, SIGNAL(resourceClicked(KoResourceSP )),
             this, SIGNAL(resourceClicked(KoResourceSP ))) ;
+    connect(m_d->uiWdgPaintOpPresets.wdgPresetChooser, SIGNAL(resourceDoubleClicked(KoResourceSP )),
+            this, SIGNAL(resourceDoubleClicked(KoResourceSP )));
 
 
     connect(iconSizeSlider, SIGNAL(valueChanged(int)),

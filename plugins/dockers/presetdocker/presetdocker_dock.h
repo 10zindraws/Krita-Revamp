@@ -10,6 +10,7 @@
 #include <QPointer>
 #include <QDockWidget>
 #include <KoCanvasObserverBase.h>
+#include <KoResource.h>
 #include <kis_canvas2.h>
 
 class KisPaintOpPresetsChooserPopup;
@@ -23,6 +24,8 @@ public:
     void unsetCanvas() override { m_canvas = 0; setEnabled(false);}
 public Q_SLOTS:
     void canvasResourceChanged(int key = 0, const QVariant& v = QVariant());
+private Q_SLOTS:
+    void slotResourceDoubleClicked(KoResourceSP resource);
 private:
     QPointer<KisCanvas2> m_canvas;
     KisPaintOpPresetsChooserPopup* m_presetChooser;

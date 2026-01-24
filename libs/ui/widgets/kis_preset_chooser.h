@@ -66,6 +66,7 @@ public:
 Q_SIGNALS:
     void resourceSelected(KoResourceSP resource);
     void resourceClicked(KoResourceSP resource);
+    void resourceDoubleClicked(KoResourceSP resource);
 
 public Q_SLOTS:
     void updateViewSettings();

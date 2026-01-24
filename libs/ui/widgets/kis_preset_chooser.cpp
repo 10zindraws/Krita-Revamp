@@ -323,6 +323,8 @@ KisPresetChooser::KisPresetChooser(QWidget *parent)
             this, SIGNAL(resourceSelected(KoResourceSP )));
     connect(m_chooser, SIGNAL(resourceClicked(KoResourceSP )),
             this, SIGNAL(resourceClicked(KoResourceSP )));
+    connect(m_chooser, SIGNAL(resourceDoubleClicked(KoResourceSP )),
+            this, SIGNAL(resourceDoubleClicked(KoResourceSP )));
 
     connect(m_chooser, SIGNAL(listViewModeChanged(ListViewMode)),
             this, SLOT(showHideBrushNames(ListViewMode)));

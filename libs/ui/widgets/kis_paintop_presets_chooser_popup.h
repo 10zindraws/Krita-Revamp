@@ -31,6 +31,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     void resourceSelected(KoResourceSP resource);
     void resourceClicked(KoResourceSP resource);
+    void resourceDoubleClicked(KoResourceSP resource);
     
 private Q_SLOTS:
     void slotThumbnailMode();
