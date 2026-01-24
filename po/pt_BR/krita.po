@@ -64990,8 +64990,8 @@ msgstr "Ferramenta de imagens de referência"
 #~ msgid "Tint: {n}%"
 #~ msgstr "Colorir: {n}%"
 
-#~ msgctxt "@title:window On-Canvas Brush Editor docker"
-#~ msgid "On-Canvas Brush Editor"
+#~ msgctxt "@title:window Sub Tool Options docker"
+#~ msgid "Sub Tool Options"
 #~ msgstr "Editor de pincel na tela de pintura"
 
 #~ msgid "Isometric (Legacy)"
