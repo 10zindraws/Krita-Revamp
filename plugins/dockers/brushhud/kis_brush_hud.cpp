@@ -20,6 +20,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
+#include <QSignalBlocker>
 
 #include "kis_uniform_paintop_property.h"
 #include "kis_slider_based_paintop_property.h"
@@ -33,6 +34,7 @@
 #include "kis_dlg_brush_hud_config.h"
 #include "kis_brush_hud_properties_config.h"
 #include "kis_elided_label.h"
+#include "kis_slider_spin_box.h"
 
 #include "kis_canvas2.h"
 #include "KisViewManager.h"
@@ -42,6 +44,24 @@
 
 #include "kis_debug.h"
 
+
+namespace {
+
+void syncDoubleSliderSettings(KisDoubleSliderSpinBox *target, KisDoubleSliderSpinBox *source)
+{
+    if (!target || !source) {
+        return;
+    }
+
+    QSignalBlocker blocker(target);
+    target->setRange(source->minimum(), source->maximum(), source->decimals());
+    target->setSingleStep(source->singleStep());
+    target->setPrefix(source->prefix());
+    target->setSuffix(source->suffix());
+    target->setToolTip(source->toolTip());
+}
+
+} // namespace
 
 struct KisBrushHud::Private
 {
@@ -63,6 +83,39 @@ struct KisBrushHud::Private
     QPointer<QWidget> brushSmoothingWidget;
     QPointer<QComboBox> brushSmoothingCombo;
     bool showBrushSmoothing = true; // Whether to show the smoothing widget
+    QPointer<QWidget> brushSmoothingDetailsWidget;
+    QPointer<QVBoxLayout> brushSmoothingDetailsLayout;
+
+    QPointer<QWidget> smoothingDistanceRow;
+    QPointer<QLabel> smoothingDistanceLabel;
+    QPointer<KisDoubleSliderSpinBox> smoothingDistanceSlider;
+    QPointer<KisDoubleSliderSpinBox> originalSmoothnessDistanceSlider;
+
+    QPointer<QWidget> smoothingTailAggressivenessRow;
+    QPointer<KisDoubleSliderSpinBox> smoothingTailAggressivenessSlider;
+    QPointer<KisDoubleSliderSpinBox> originalTailAggressivenessSlider;
+
+    QPointer<QWidget> smoothingSmoothPressureRow;
+    QPointer<QCheckBox> smoothingSmoothPressureCheck;
+    QPointer<QCheckBox> originalSmoothPressureCheck;
+
+    QPointer<QWidget> smoothingScalableDistanceRow;
+    QPointer<QCheckBox> smoothingScalableDistanceCheck;
+    QPointer<QCheckBox> originalScalableDistanceCheck;
+
+    QPointer<QWidget> smoothingDelayRow;
+    QPointer<QCheckBox> smoothingDelayCheck;
+    QPointer<KisDoubleSliderSpinBox> smoothingDelaySlider;
+    QPointer<QCheckBox> originalDelayCheck;
+    QPointer<KisDoubleSliderSpinBox> originalDelayDistanceSlider;
+
+    QPointer<QWidget> smoothingFinishLineRow;
+    QPointer<QCheckBox> smoothingFinishLineCheck;
+    QPointer<QCheckBox> originalFinishLineCheck;
+
+    QPointer<QWidget> smoothingStabilizeSensorsRow;
+    QPointer<QCheckBox> smoothingStabilizeSensorsCheck;
+    QPointer<QCheckBox> originalStabilizeSensorsCheck;
 
     QPointer<QCheckBox> snapToAssistantsCheckbox;
     bool showSnapToAssistants = true; // Whether to show the checkbox
@@ -416,12 +469,49 @@ void KisBrushHud::updateToolOptionWidgets()
         m_d->brushSmoothingWidget = nullptr;
         m_d->brushSmoothingCombo = nullptr;
     }
+    if (!m_d->brushSmoothingDetailsWidget.isNull()) {
+        m_d->propertiesLayout->removeWidget(m_d->brushSmoothingDetailsWidget);
+        m_d->brushSmoothingDetailsWidget->deleteLater();
+        m_d->brushSmoothingDetailsWidget = nullptr;
+        m_d->brushSmoothingDetailsLayout = nullptr;
+    }
     if (!m_d->snapToAssistantsCheckbox.isNull()) {
         m_d->propertiesLayout->removeWidget(m_d->snapToAssistantsCheckbox);
         // Properly delete the checkbox to prevent it from becoming an orphaned top-level window
         m_d->snapToAssistantsCheckbox->deleteLater();
         m_d->snapToAssistantsCheckbox = nullptr;
     }
+
+    m_d->smoothingDistanceRow = nullptr;
+    m_d->smoothingDistanceLabel = nullptr;
+    m_d->smoothingDistanceSlider = nullptr;
+    m_d->originalSmoothnessDistanceSlider = nullptr;
+
+    m_d->smoothingTailAggressivenessRow = nullptr;
+    m_d->smoothingTailAggressivenessSlider = nullptr;
+    m_d->originalTailAggressivenessSlider = nullptr;
+
+    m_d->smoothingSmoothPressureRow = nullptr;
+    m_d->smoothingSmoothPressureCheck = nullptr;
+    m_d->originalSmoothPressureCheck = nullptr;
+
+    m_d->smoothingScalableDistanceRow = nullptr;
+    m_d->smoothingScalableDistanceCheck = nullptr;
+    m_d->originalScalableDistanceCheck = nullptr;
+
+    m_d->smoothingDelayRow = nullptr;
+    m_d->smoothingDelayCheck = nullptr;
+    m_d->smoothingDelaySlider = nullptr;
+    m_d->originalDelayCheck = nullptr;
+    m_d->originalDelayDistanceSlider = nullptr;
+
+    m_d->smoothingFinishLineRow = nullptr;
+    m_d->smoothingFinishLineCheck = nullptr;
+    m_d->originalFinishLineCheck = nullptr;
+
+    m_d->smoothingStabilizeSensorsRow = nullptr;
+    m_d->smoothingStabilizeSensorsCheck = nullptr;
+    m_d->originalStabilizeSensorsCheck = nullptr;
 
     m_d->showBrushSmoothing = false;
     m_d->showSnapToAssistants = false;
@@ -466,6 +556,297 @@ void KisBrushHud::updateToolOptionWidgets()
             container->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
             m_d->brushSmoothingWidget = container;
             m_d->brushSmoothingCombo = combo;
+
+            struct LabelMatch {
+                QGridLayout *layout = nullptr;
+                QWidget *labelWidget = nullptr;
+            };
+
+            auto findLabelMatch = [&](const QString &labelText) -> LabelMatch {
+                for (QPointer<QWidget> widget : m_d->toolOptionWidgets) {
+                    if (widget.isNull()) {
+                        continue;
+                    }
+
+                    const QList<QLabel*> labels = widget->findChildren<QLabel*>();
+                    for (QLabel *label : labels) {
+                        if (label->text() != labelText) {
+                            continue;
+                        }
+
+                        const QList<QGridLayout*> layouts = widget->findChildren<QGridLayout*>();
+                        for (QGridLayout *layout : layouts) {
+                            QWidget *labelCandidate = label;
+                            int index = layout->indexOf(labelCandidate);
+                            while (index < 0 && labelCandidate->parentWidget()) {
+                                labelCandidate = labelCandidate->parentWidget();
+                                index = layout->indexOf(labelCandidate);
+                            }
+
+                            if (index >= 0) {
+                                return {layout, labelCandidate};
+                            }
+                        }
+                    }
+                }
+
+                return {};
+            };
+
+            auto findControlForLabel = [&](const QString &labelText) -> QWidget* {
+                const LabelMatch match = findLabelMatch(labelText);
+                if (!match.layout || !match.labelWidget) {
+                    return nullptr;
+                }
+
+                const int index = match.layout->indexOf(match.labelWidget);
+                if (index < 0) {
+                    return nullptr;
+                }
+
+                int row = 0;
+                int col = 0;
+                int rowSpan = 0;
+                int colSpan = 0;
+                match.layout->getItemPosition(index, &row, &col, &rowSpan, &colSpan);
+
+                QLayoutItem *item = match.layout->itemAtPosition(row, col + 1);
+                if (!item) {
+                    item = match.layout->itemAtPosition(row, col - 1);
+                }
+
+                return item ? item->widget() : nullptr;
+            };
+
+            const QString distanceLabelText = i18nc("Label of Distance value in Freehand brush tool's Weighted Smoothing mode", "Distance:");
+            const QString sampleCountLabelText = i18n("Sample count:");
+            const QString strokeEndingLabelText = i18n("Stroke Ending:");
+            const QString smoothPressureLabelText = QString("%1:").arg(i18n("Smooth Pressure"));
+            const QString scalableDistanceLabelText = QString("%1:").arg(i18n("Scalable Distance"));
+            const QString delayLabelText = i18n("Delay:");
+            const QString finishLineLabelText = i18n("Finish line:");
+            const QString stabilizeSensorsLabelText = i18n("Stabilize Sensors:");
+
+            m_d->originalSmoothnessDistanceSlider =
+                qobject_cast<KisDoubleSliderSpinBox*>(findControlForLabel(distanceLabelText));
+            if (!m_d->originalSmoothnessDistanceSlider) {
+                m_d->originalSmoothnessDistanceSlider =
+                    qobject_cast<KisDoubleSliderSpinBox*>(findControlForLabel(sampleCountLabelText));
+            }
+            m_d->originalTailAggressivenessSlider =
+                qobject_cast<KisDoubleSliderSpinBox*>(findControlForLabel(strokeEndingLabelText));
+            m_d->originalSmoothPressureCheck =
+                qobject_cast<QCheckBox*>(findControlForLabel(smoothPressureLabelText));
+            m_d->originalScalableDistanceCheck =
+                qobject_cast<QCheckBox*>(findControlForLabel(scalableDistanceLabelText));
+            m_d->originalDelayDistanceSlider =
+                qobject_cast<KisDoubleSliderSpinBox*>(findControlForLabel(delayLabelText));
+            m_d->originalFinishLineCheck =
+                qobject_cast<QCheckBox*>(findControlForLabel(finishLineLabelText));
+            m_d->originalStabilizeSensorsCheck =
+                qobject_cast<QCheckBox*>(findControlForLabel(stabilizeSensorsLabelText));
+
+            const LabelMatch delayLabelMatch = findLabelMatch(delayLabelText);
+            if (delayLabelMatch.labelWidget) {
+                m_d->originalDelayCheck = delayLabelMatch.labelWidget->findChild<QCheckBox*>();
+            }
+
+            bool hasRows = false;
+            QWidget *detailsWidget = new QWidget(m_d->wdgProperties);
+            QVBoxLayout *detailsLayout = new QVBoxLayout(detailsWidget);
+            detailsLayout->setContentsMargins(0, 0, 0, 0);
+            detailsLayout->setSpacing(2);
+
+            auto createRow = [&](QWidget *label, QWidget *control) -> QWidget* {
+                QWidget *row = new QWidget(detailsWidget);
+                QHBoxLayout *rowLayout = new QHBoxLayout(row);
+                rowLayout->setContentsMargins(0, 0, 0, 0);
+                rowLayout->setSpacing(4);
+                label->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+                control->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+                rowLayout->addWidget(label);
+                rowLayout->addWidget(control);
+                detailsLayout->addWidget(row);
+                hasRows = true;
+                return row;
+            };
+
+            auto linkDoubleSlider = [&](KisDoubleSliderSpinBox *target, KisDoubleSliderSpinBox *source) {
+                if (!target || !source) {
+                    return;
+                }
+
+                syncDoubleSliderSettings(target, source);
+                target->setValue(source->value());
+
+                const QPointer<KisDoubleSliderSpinBox> targetPtr = target;
+                const QPointer<KisDoubleSliderSpinBox> sourcePtr = source;
+
+                connect(target, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                        source, [sourcePtr](double value) {
+                            if (sourcePtr && sourcePtr->value() != value) {
+                                sourcePtr->setValue(value);
+                            }
+                        });
+                connect(source, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                        target, [targetPtr](double value) {
+                            if (targetPtr && targetPtr->value() != value) {
+                                targetPtr->setValue(value);
+                            }
+                        });
+            };
+
+            auto linkCheckBox = [&](QCheckBox *target, QCheckBox *source) {
+                if (!target || !source) {
+                    return;
+                }
+
+                target->setChecked(source->isChecked());
+                target->setToolTip(source->toolTip());
+                connect(target, &QCheckBox::toggled, source, &QCheckBox::setChecked);
+                connect(source, &QCheckBox::toggled, target, &QCheckBox::setChecked);
+            };
+
+            if (m_d->originalSmoothnessDistanceSlider) {
+                m_d->smoothingDistanceLabel = new QLabel(distanceLabelText, detailsWidget);
+                m_d->smoothingDistanceSlider = new KisDoubleSliderSpinBox(detailsWidget);
+                m_d->smoothingDistanceRow = createRow(m_d->smoothingDistanceLabel, m_d->smoothingDistanceSlider);
+                linkDoubleSlider(m_d->smoothingDistanceSlider, m_d->originalSmoothnessDistanceSlider);
+            }
+
+            if (m_d->originalTailAggressivenessSlider) {
+                QLabel *label = new QLabel(strokeEndingLabelText, detailsWidget);
+                m_d->smoothingTailAggressivenessSlider = new KisDoubleSliderSpinBox(detailsWidget);
+                m_d->smoothingTailAggressivenessRow = createRow(label, m_d->smoothingTailAggressivenessSlider);
+                linkDoubleSlider(m_d->smoothingTailAggressivenessSlider, m_d->originalTailAggressivenessSlider);
+            }
+
+            if (m_d->originalSmoothPressureCheck) {
+                QLabel *label = new QLabel(smoothPressureLabelText, detailsWidget);
+                m_d->smoothingSmoothPressureCheck = new QCheckBox(detailsWidget);
+                m_d->smoothingSmoothPressureRow = createRow(label, m_d->smoothingSmoothPressureCheck);
+                linkCheckBox(m_d->smoothingSmoothPressureCheck, m_d->originalSmoothPressureCheck);
+            }
+
+            if (m_d->originalScalableDistanceCheck) {
+                QLabel *label = new QLabel(scalableDistanceLabelText, detailsWidget);
+                m_d->smoothingScalableDistanceCheck = new QCheckBox(detailsWidget);
+                m_d->smoothingScalableDistanceRow = createRow(label, m_d->smoothingScalableDistanceCheck);
+                linkCheckBox(m_d->smoothingScalableDistanceCheck, m_d->originalScalableDistanceCheck);
+            }
+
+            if (m_d->originalDelayDistanceSlider) {
+                QWidget *delayLabelWidget = new QWidget(detailsWidget);
+                QHBoxLayout *delayLabelLayout = new QHBoxLayout(delayLabelWidget);
+                delayLabelLayout->setContentsMargins(0, 0, 0, 0);
+                delayLabelLayout->setSpacing(1);
+
+                QLabel *delayLabel = new QLabel(delayLabelText, delayLabelWidget);
+                m_d->smoothingDelayCheck = new QCheckBox(delayLabelWidget);
+                m_d->smoothingDelayCheck->setLayoutDirection(Qt::RightToLeft);
+                delayLabelLayout->addWidget(delayLabel);
+                delayLabelLayout->addWidget(m_d->smoothingDelayCheck);
+
+                if (delayLabelMatch.labelWidget) {
+                    delayLabelWidget->setToolTip(delayLabelMatch.labelWidget->toolTip());
+                }
+
+                m_d->smoothingDelaySlider = new KisDoubleSliderSpinBox(detailsWidget);
+                m_d->smoothingDelayRow = createRow(delayLabelWidget, m_d->smoothingDelaySlider);
+
+                linkDoubleSlider(m_d->smoothingDelaySlider, m_d->originalDelayDistanceSlider);
+                linkCheckBox(m_d->smoothingDelayCheck, m_d->originalDelayCheck);
+            }
+
+            if (m_d->originalFinishLineCheck) {
+                QLabel *label = new QLabel(finishLineLabelText, detailsWidget);
+                m_d->smoothingFinishLineCheck = new QCheckBox(detailsWidget);
+                m_d->smoothingFinishLineRow = createRow(label, m_d->smoothingFinishLineCheck);
+                linkCheckBox(m_d->smoothingFinishLineCheck, m_d->originalFinishLineCheck);
+            }
+
+            if (m_d->originalStabilizeSensorsCheck) {
+                QLabel *label = new QLabel(stabilizeSensorsLabelText, detailsWidget);
+                m_d->smoothingStabilizeSensorsCheck = new QCheckBox(detailsWidget);
+                m_d->smoothingStabilizeSensorsRow = createRow(label, m_d->smoothingStabilizeSensorsCheck);
+                linkCheckBox(m_d->smoothingStabilizeSensorsCheck, m_d->originalStabilizeSensorsCheck);
+            }
+
+            if (m_d->smoothingDelaySlider && m_d->originalDelayDistanceSlider) {
+                m_d->smoothingDelaySlider->setEnabled(m_d->originalDelayDistanceSlider->isEnabled());
+            }
+            if (m_d->smoothingFinishLineCheck && m_d->originalFinishLineCheck) {
+                m_d->smoothingFinishLineCheck->setEnabled(m_d->originalFinishLineCheck->isEnabled());
+            }
+
+            if (m_d->originalDelayCheck) {
+                connect(m_d->originalDelayCheck, &QCheckBox::toggled,
+                        this, [this](bool) {
+                            if (m_d->smoothingDelaySlider && m_d->originalDelayDistanceSlider) {
+                                m_d->smoothingDelaySlider->setEnabled(m_d->originalDelayDistanceSlider->isEnabled());
+                            }
+                            if (m_d->smoothingFinishLineCheck && m_d->originalFinishLineCheck) {
+                                m_d->smoothingFinishLineCheck->setEnabled(m_d->originalFinishLineCheck->isEnabled());
+                            }
+                        });
+            }
+
+            if (hasRows) {
+                m_d->brushSmoothingDetailsWidget = detailsWidget;
+                m_d->brushSmoothingDetailsLayout = detailsLayout;
+
+                auto updateSmoothingDetails = [this, distanceLabelText, sampleCountLabelText]() {
+                    if (!m_d->brushSmoothingCombo) {
+                        return;
+                    }
+
+                    const int index = m_d->brushSmoothingCombo->currentIndex();
+                    const bool weighted = index == 2;
+                    const bool stabilizer = index == 3;
+                    const bool showDistance = weighted || stabilizer;
+
+                    if (m_d->brushSmoothingDetailsWidget) {
+                        m_d->brushSmoothingDetailsWidget->setVisible(weighted || stabilizer);
+                    }
+
+                    if (m_d->smoothingDistanceRow) {
+                        m_d->smoothingDistanceRow->setVisible(showDistance);
+                    }
+                    if (m_d->smoothingTailAggressivenessRow) {
+                        m_d->smoothingTailAggressivenessRow->setVisible(weighted);
+                    }
+                    if (m_d->smoothingSmoothPressureRow) {
+                        m_d->smoothingSmoothPressureRow->setVisible(weighted);
+                    }
+                    if (m_d->smoothingScalableDistanceRow) {
+                        m_d->smoothingScalableDistanceRow->setVisible(weighted);
+                    }
+                    if (m_d->smoothingDelayRow) {
+                        m_d->smoothingDelayRow->setVisible(stabilizer);
+                    }
+                    if (m_d->smoothingFinishLineRow) {
+                        m_d->smoothingFinishLineRow->setVisible(stabilizer);
+                    }
+                    if (m_d->smoothingStabilizeSensorsRow) {
+                        m_d->smoothingStabilizeSensorsRow->setVisible(stabilizer);
+                    }
+
+                    if (m_d->smoothingDistanceLabel) {
+                        m_d->smoothingDistanceLabel->setText(stabilizer ? sampleCountLabelText : distanceLabelText);
+                    }
+
+                    if (m_d->smoothingDistanceSlider && m_d->originalSmoothnessDistanceSlider) {
+                        syncDoubleSliderSettings(m_d->smoothingDistanceSlider, m_d->originalSmoothnessDistanceSlider);
+                        m_d->smoothingDistanceSlider->setValue(m_d->originalSmoothnessDistanceSlider->value());
+                    }
+                };
+
+                connect(m_d->brushSmoothingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                        this, [updateSmoothingDetails](int) { updateSmoothingDetails(); });
+                updateSmoothingDetails();
+            } else {
+                detailsWidget->deleteLater();
+            }
         }
     }
 
@@ -503,6 +884,9 @@ void KisBrushHud::insertToolOptionWidgets()
 
     if (!m_d->brushSmoothingWidget.isNull()) {
         m_d->propertiesLayout->insertWidget(insertPosition++, m_d->brushSmoothingWidget);
+    }
+    if (!m_d->brushSmoothingDetailsWidget.isNull()) {
+        m_d->propertiesLayout->insertWidget(insertPosition++, m_d->brushSmoothingDetailsWidget);
     }
     if (!m_d->snapToAssistantsCheckbox.isNull()) {
         m_d->propertiesLayout->insertWidget(insertPosition++, m_d->snapToAssistantsCheckbox);
