@@ -112,9 +112,8 @@ void KisResourceTaggingManager::slotFilterByTagChanged(const bool filterByTag)
 
 void KisResourceTaggingManager::contextMenuRequested(KoResourceSP resource, QPoint pos)
 {
-    // No visible tag chooser usually means no intended tag interaction,
-    // context menu makes no sense then either
-    if (!resource || !d->tagChooser->isVisible())
+    // tagChooser widget is hidden in the UI but its functionality is still needed for tag operations
+    if (!resource)
         return;
 
     KisResourceItemChooserContextMenu menu(resource, d->tagChooser->currentlySelectedTag(), d->tagChooser);
