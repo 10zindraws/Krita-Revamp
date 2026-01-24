@@ -89,6 +89,7 @@ public:
 
     // TODO: they can be static const variables, too, if it's better than functions
     static QString urlAll() { return "All"; }
+    static QString urlFavorites() { return "★ My Favorites"; }
 
 private Q_SLOTS:
 

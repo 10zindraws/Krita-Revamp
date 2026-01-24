@@ -629,6 +629,12 @@ bool KisTagModel::filterAcceptsRow(int source_row, const QModelIndex &source_par
         return true;
     }
 
+    // Filter out the favorites tag from visual display
+    QString tagUrl = sourceModel()->data(idx, Qt::UserRole + KisAllTagsModel::Url).toString();
+    if (tagUrl == KisAllTagsModel::urlFavorites()) {
+        return false;
+    }
+
     TagFilter tagActive = (TagFilter)sourceModel()->data(idx, Qt::UserRole + KisAllTagsModel::Active).toInt();
 
     StorageFilter storageActive = ShowAllStorages;

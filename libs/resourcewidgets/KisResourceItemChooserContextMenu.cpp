@@ -23,7 +23,7 @@
 #include "kis_debug.h"
 
 bool isSpecialTag(KisTagSP tag) {
-    return !tag.isNull() && tag->id() < 0;
+    return !tag.isNull() && (tag->id() < 0 || tag->url() == KisAllTagsModel::urlFavorites());
 }
 
 

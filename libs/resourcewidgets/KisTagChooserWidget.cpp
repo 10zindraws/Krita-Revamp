@@ -347,7 +347,9 @@ void KisTagChooserWidget::tagToolContextMenuAboutToShow()
 {
     /* only enable the save button if the selected tag set is editable */
     if (currentlySelectedTag()) {
-        d->tagToolButton->readOnlyMode(currentlySelectedTag()->id() < 0);
+        bool isReadOnly = currentlySelectedTag()->id() < 0 ||
+                         currentlySelectedTag()->url() == KisAllTagsModel::urlFavorites();
+        d->tagToolButton->readOnlyMode(isReadOnly);
     }
     else {
         d->tagToolButton->readOnlyMode(true);
