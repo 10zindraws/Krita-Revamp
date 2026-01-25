@@ -68,13 +68,11 @@ install_pykrita_plugin(batch_exporter)
 #install_pykrita_plugin(highpass)
 #install_pykrita_plugin(palette_docker)  # Needs fixing -> bug 405194
 install_pykrita_plugin(quick_settings_docker)
-install_pykrita_plugin(lastdocumentsdocker)
 # install_pykrita_plugin(scriptdocker)
 install_pykrita_plugin(comics_project_management_tools)
 install_pykrita_plugin(krita_script_starter)
 install_pykrita_plugin(plugin_importer)
 install_pykrita_plugin(channels2layers PATTERNS "*.jpg")
-install_pykrita_plugin(photobash_images)
 
 # Additional community plugins
 install_pykrita_plugin(quick_brush_size)
