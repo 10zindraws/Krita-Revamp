@@ -113,6 +113,8 @@ private:
     void writeMeta(const QString &metaTag, KoXmlWriter *writer);
     void writeUserDefinedMeta(const QString &metaTag, KoXmlWriter *writer);
     bool readMetaData(KoStore *resourceStore);
+    QString manifestOverridePath() const;
+    bool saveManifestOverride();
 
 private:
     QImage m_thumbnail;
@@ -127,6 +129,9 @@ private:
     QList<QByteArray> m_presetsMd5Installed;
     QString m_filename;
     QString m_bundleVersion;
+    QString m_rootPrefix;
+    bool m_manifestDirty {false};
+    bool m_manifestOverrideLoaded {false};
 
 };
 

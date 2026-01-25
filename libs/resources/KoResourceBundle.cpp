@@ -11,10 +11,14 @@
 #include <QCryptographicHash>
 #include <QDate>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QPainter>
 #include <QProcessEnvironment>
 #include <QScopedPointer>
+#include <QSaveFile>
+#include <QSet>
 #include <QStringList>
 
 #include <klocalizedstring.h>
@@ -35,6 +39,163 @@
 
 #include <kis_debug.h>
 #include <KisGlobalResourcesInterface.h>
+
+
+namespace {
+QString ensureTrailingSlash(const QString &prefix)
+{
+    if (prefix.isEmpty() || prefix.endsWith('/')) {
+        return prefix;
+    }
+    return prefix + '/';
+}
+
+QString prefixedPath(const QString &prefix, const QString &path)
+{
+    if (prefix.isEmpty()) {
+        return path;
+    }
+    if (path.isEmpty()) {
+        return prefix;
+    }
+    return prefix + path;
+}
+
+QString manifestOverridePath(const QString &bundleFilename)
+{
+    return QDir::cleanPath(bundleFilename + "_modified/META-INF/manifest.xml");
+}
+
+QString normalizedCaseKey(const QString &path)
+{
+    return QDir::fromNativeSeparators(path).toLower();
+}
+
+QString normalizedLooseKey(const QString &path)
+{
+    QString normalized = normalizedCaseKey(path);
+    normalized.replace('_', ' ');
+    normalized = normalized.simplified();
+    normalized.replace(' ', '_');
+    return normalized;
+}
+
+QString normalizeMd5String(const QString &md5sum)
+{
+    if (md5sum.isEmpty()) {
+        return md5sum;
+    }
+
+    bool isHex = true;
+    for (const QChar &ch : md5sum) {
+        const QChar lower = ch.toLower();
+        if (!lower.isDigit() && (lower < 'a' || lower > 'f')) {
+            isHex = false;
+            break;
+        }
+    }
+
+    if (isHex) {
+        return md5sum.toLower();
+    }
+
+    return QString::fromLatin1(md5sum.toLatin1().toHex());
+}
+
+QString resolveMissingPath(const QString &resourcePath, const QStringList &relativeEntries)
+{
+    QString target = normalizedCaseKey(resourcePath);
+    QString resolved;
+    int matches = 0;
+
+    for (const QString &entry : relativeEntries) {
+        if (normalizedCaseKey(entry) == target) {
+            resolved = entry;
+            if (++matches > 1) {
+                break;
+            }
+        }
+    }
+
+    if (matches == 1) {
+        return resolved;
+    }
+
+    target = normalizedLooseKey(resourcePath);
+    resolved.clear();
+    matches = 0;
+
+    for (const QString &entry : relativeEntries) {
+        if (normalizedLooseKey(entry) == target) {
+            resolved = entry;
+            if (++matches > 1) {
+                break;
+            }
+        }
+    }
+
+    return matches == 1 ? resolved : QString();
+}
+
+QString detectRootPrefix(KoStore *store)
+{
+    if (!store) {
+        return QString();
+    }
+
+    if (store->hasFile("META-INF/manifest.xml")) {
+        return QString();
+    }
+
+    const QStringList entries = store->directoryList();
+    const QString manifestSuffix = "META-INF/manifest.xml";
+    QString manifestPrefix;
+
+    for (const QString &entry : entries) {
+        const QString normalized = QDir::fromNativeSeparators(entry);
+        if (normalized.endsWith(manifestSuffix)) {
+            QString candidate = normalized.left(normalized.length() - manifestSuffix.length());
+            candidate = ensureTrailingSlash(candidate);
+            if (manifestPrefix.isEmpty()) {
+                manifestPrefix = candidate;
+            } else if (manifestPrefix != candidate) {
+                manifestPrefix.clear();
+                break;
+            }
+        }
+    }
+
+    if (!manifestPrefix.isEmpty()) {
+        return manifestPrefix;
+    }
+
+    QString topLevel;
+    for (const QString &entry : entries) {
+        QString normalized = QDir::fromNativeSeparators(entry);
+        if (normalized.endsWith('/')) {
+            continue;
+        }
+        int slashIdx = normalized.indexOf('/');
+        if (slashIdx <= 0) {
+            topLevel.clear();
+            break;
+        }
+        const QString current = normalized.left(slashIdx);
+        if (topLevel.isEmpty()) {
+            topLevel = current;
+        } else if (topLevel != current) {
+            topLevel.clear();
+            break;
+        }
+    }
+
+    if (!topLevel.isEmpty()) {
+        return ensureTrailingSlash(topLevel);
+    }
+
+    return QString();
+}
+} // namespace
 
 
 KoResourceBundle::KoResourceBundle(QString const& fileName)
@@ -66,43 +227,168 @@ bool KoResourceBundle::load()
     else {
 
         m_metadata.clear();
+        m_manifestDirty = false;
+        m_manifestOverrideLoaded = false;
+        m_rootPrefix = ensureTrailingSlash(detectRootPrefix(resourceStore.data()));
 
-        if (resourceStore->open("META-INF/manifest.xml")) {
-            if (!m_manifest.load(resourceStore->device())) {
-                qWarning() << "Could not open manifest for bundle" << m_filename;
-                return false;
-            }
-            resourceStore->close();
+        bool manifestLoaded = false;
+        const QString overridePath = manifestOverridePath();
+        const QFileInfo overrideInfo(overridePath);
+        const QFileInfo bundleInfo(m_filename);
 
-            QStringList missingFiles;
-            Q_FOREACH (KoResourceBundleManifest::ResourceReference ref, m_manifest.files()) {
-                if (!resourceStore->hasFile(ref.resourcePath)) {
-                    m_manifest.removeResource(ref);
-                    missingFiles << ref.resourcePath;
-                }
-            }
-            
-            if (!missingFiles.isEmpty()) {
-                if (missingFiles.size() <= 3) {
-                    qWarning() << "Bundle" << filename() << "is broken. Missing files:" << missingFiles.join(", ");
+        if (overrideInfo.exists() &&
+            (!bundleInfo.exists() || overrideInfo.lastModified() >= bundleInfo.lastModified())) {
+            QFile overrideFile(overridePath);
+            if (overrideFile.open(QIODevice::ReadOnly)) {
+                if (m_manifest.load(&overrideFile)) {
+                    manifestLoaded = true;
+                    m_manifestOverrideLoaded = true;
                 } else {
-                    qWarning() << "Bundle" << filename() << "is broken. Missing" << missingFiles.size() 
-                               << "files, including:" << missingFiles.mid(0, 3).join(", ") << "...";
+                    qWarning() << "Could not open manifest override for bundle" << m_filename;
                 }
             }
+        }
 
-        } else {
-            qWarning() << "Could not load META-INF/manifest.xml";
-            return false;
+        auto generateManifestFromStore = [&]() -> bool {
+            const QStringList resourceTypes = KisResourceLoaderRegistry::instance()->resourceTypes();
+#if QT_VERSION >= QT_VERSION_CHECK(5,14,0)
+            const QSet<QString> resourceTypeSet(resourceTypes.begin(), resourceTypes.end());
+#else
+            const QSet<QString> resourceTypeSet = QSet<QString>::fromList(resourceTypes);
+#endif
+            m_manifest = KoResourceBundleManifest();
+
+            bool foundResources = false;
+            const QStringList entries = resourceStore->directoryList();
+
+            for (const QString &entry : entries) {
+                QString normalized = QDir::fromNativeSeparators(entry);
+                if (normalized.endsWith('/')) {
+                    continue;
+                }
+
+                QString relative = normalized;
+                if (!m_rootPrefix.isEmpty()) {
+                    if (!relative.startsWith(m_rootPrefix)) {
+                        continue;
+                    }
+                    relative = relative.mid(m_rootPrefix.length());
+                }
+
+                int slashIdx = relative.indexOf('/');
+                if (slashIdx <= 0) {
+                    continue;
+                }
+
+                const QString folder = relative.left(slashIdx);
+                if (!resourceTypeSet.contains(folder)) {
+                    continue;
+                }
+
+                const QString filenameInBundle = relative.mid(folder.length() + 1);
+                if (filenameInBundle.isEmpty()) {
+                    continue;
+                }
+
+                if (!resourceStore->open(normalized)) {
+                    continue;
+                }
+                const QString md5 = KoMD5Generator::generateHash(resourceStore->device());
+                resourceStore->close();
+
+                m_manifest.addResource(folder, relative, {}, md5, -1, filenameInBundle);
+                foundResources = true;
+            }
+
+            if (foundResources) {
+                qWarning() << "Bundle" << m_filename << "has no manifest; generated a temporary manifest.";
+            }
+
+            return foundResources;
+        };
+
+        if (!manifestLoaded) {
+            const QString manifestPath = prefixedPath(m_rootPrefix, "META-INF/manifest.xml");
+            if (resourceStore->open(manifestPath)) {
+                if (!m_manifest.load(resourceStore->device())) {
+                    qWarning() << "Could not open manifest for bundle" << m_filename;
+                    return false;
+                }
+                resourceStore->close();
+                manifestLoaded = true;
+            } else {
+                if (!generateManifestFromStore()) {
+                    qWarning() << "Could not load META-INF/manifest.xml";
+                    return false;
+                }
+                manifestLoaded = true;
+                m_manifestDirty = true;
+            }
+        }
+
+        QStringList relativeEntries;
+        const QStringList storeEntries = resourceStore->directoryList();
+        relativeEntries.reserve(storeEntries.size());
+
+        for (const QString &entry : storeEntries) {
+            QString normalized = QDir::fromNativeSeparators(entry);
+            if (normalized.endsWith('/')) {
+                continue;
+            }
+            if (!m_rootPrefix.isEmpty()) {
+                if (!normalized.startsWith(m_rootPrefix)) {
+                    continue;
+                }
+                normalized = normalized.mid(m_rootPrefix.length());
+            }
+            relativeEntries << normalized;
+        }
+
+        QStringList missingFiles;
+        Q_FOREACH (KoResourceBundleManifest::ResourceReference ref, m_manifest.files()) {
+            if (ref.fileTypeName == "application/x-krita-resourcebundle" || ref.resourcePath == "/") {
+                continue;
+            }
+
+            const QString resourcePath = ref.resourcePath;
+            if (!resourceStore->hasFile(prefixedPath(m_rootPrefix, resourcePath))) {
+                const QString resolved = resolveMissingPath(resourcePath, relativeEntries);
+                if (!resolved.isEmpty()) {
+                    QString filenameInBundle = resolved;
+                    if (filenameInBundle.startsWith(ref.fileTypeName + "/")) {
+                        filenameInBundle = filenameInBundle.mid(ref.fileTypeName.length() + 1);
+                    }
+                    m_manifest.removeResource(ref);
+                    m_manifest.addResource(ref.fileTypeName, resolved, ref.tagList, ref.md5sum, ref.resourceId, filenameInBundle);
+                } else {
+                    m_manifest.removeResource(ref);
+                    missingFiles << resourcePath;
+                }
+                m_manifestDirty = true;
+            }
+        }
+
+        if (!missingFiles.isEmpty()) {
+            if (missingFiles.size() <= 3) {
+                qWarning() << "Bundle" << filename() << "is broken. Missing files:" << missingFiles.join(", ");
+            } else {
+                qWarning() << "Bundle" << filename() << "is broken. Missing" << missingFiles.size()
+                           << "files, including:" << missingFiles.mid(0, 3).join(", ") << "...";
+            }
+        }
+
+        if (m_manifestDirty) {
+            saveManifestOverride();
         }
 
         bool versionFound = false;
         if (!readMetaData(resourceStore.data())) {
             qWarning() << "Could not load meta.xml";
-            return false;
+            m_metadata[KisResourceStorage::s_meta_generator] =
+                "Krita (" + KritaVersionWrapper::versionString(true) + ")";
         }
 
-        if (resourceStore->open("preview.png")) {
+        if (resourceStore->open(prefixedPath(m_rootPrefix, "preview.png"))) {
             // Workaround for some OS (Debian, Ubuntu), where loading directly from the QIODevice
             // fails with "libpng error: IDAT: CRC error"
             QByteArray data = resourceStore->device()->readAll();
@@ -331,7 +617,8 @@ void KoResourceBundle::writeUserDefinedMeta(const QString &metaTag, KoXmlWriter 
 
 bool KoResourceBundle::readMetaData(KoStore *resourceStore)
 {
-    if (resourceStore->open("meta.xml")) {
+    const QString metaPath = prefixedPath(m_rootPrefix, "meta.xml");
+    if (resourceStore->open(metaPath)) {
         QDomDocument doc;
         if (!doc.setContent(resourceStore->device())) {
             qWarning() << "Could not parse meta.xml for" << m_filename;
@@ -453,6 +740,56 @@ void KoResourceBundle::saveManifest(QScopedPointer<KoStore> &store)
     store->close();
 }
 
+QString KoResourceBundle::manifestOverridePath() const
+{
+    return ::manifestOverridePath(m_filename);
+}
+
+bool KoResourceBundle::saveManifestOverride()
+{
+    const QString path = manifestOverridePath();
+    QFileInfo info(path);
+    QDir dir(info.path());
+    if (!dir.exists() && !dir.mkpath(".")) {
+        qWarning() << "Could not create manifest override path" << info.path();
+        return false;
+    }
+
+    KoResourceBundleManifest fixedManifest;
+    Q_FOREACH (const QString &type, m_manifest.types()) {
+        Q_FOREACH (const KoResourceBundleManifest::ResourceReference &ref, m_manifest.files(type)) {
+            QString filenameInBundle = ref.filenameInBundle;
+            if (filenameInBundle.startsWith(type + "/")) {
+                filenameInBundle = filenameInBundle.mid(type.length() + 1);
+            } else if (ref.resourcePath.startsWith(type + "/")) {
+                filenameInBundle = ref.resourcePath.mid(type.length() + 1);
+            }
+            const QString md5sum = normalizeMd5String(ref.md5sum);
+            fixedManifest.addResource(type, ref.resourcePath, ref.tagList, md5sum, ref.resourceId, filenameInBundle);
+        }
+    }
+
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "Could not open manifest override for writing" << path;
+        return false;
+    }
+
+    if (!fixedManifest.save(&file)) {
+        qWarning() << "Could not save manifest override for bundle" << m_filename;
+        return false;
+    }
+
+    if (!file.commit()) {
+        qWarning() << "Could not commit manifest override for bundle" << m_filename;
+        return false;
+    }
+
+    m_manifestDirty = false;
+    m_manifestOverrideLoaded = true;
+    return true;
+}
+
 int KoResourceBundle::resourceCount() const
 {
     return m_manifest.files().count();
@@ -494,9 +831,13 @@ bool KoResourceBundle::exportResource(const QString &resourceType, const QString
         qWarning() << "Could not open store on bundle" << m_filename;
         return false;
     }
+    if (m_rootPrefix.isEmpty()) {
+        m_rootPrefix = ensureTrailingSlash(detectRootPrefix(resourceStore.data()));
+    }
     const QString filePath = QString("%1/%2").arg(resourceType).arg(fileName);
 
-    if (!resourceStore->open(filePath)) {
+    const QString storePath = prefixedPath(m_rootPrefix, filePath);
+    if (!resourceStore->open(storePath)) {
         qWarning() << "Could not open file in bundle" << filePath;
         return false;
     }
@@ -518,16 +859,36 @@ bool KoResourceBundle::loadResource(KoResourceSP resource)
         qWarning() << "Could not open store on bundle" << m_filename;
         return false;
     }
+    if (m_rootPrefix.isEmpty()) {
+        m_rootPrefix = ensureTrailingSlash(detectRootPrefix(resourceStore.data()));
+    }
     const QString fileName = QString("%1/%2").arg(resourceType).arg(resource->filename());
 
-    if (!resourceStore->open(fileName)) {
+    const QString storePath = prefixedPath(m_rootPrefix, fileName);
+    if (!resourceStore->open(storePath)) {
         qWarning() << "Could not open file in bundle" << fileName;
+        m_manifest.removeFile(fileName);
+        m_manifestDirty = true;
+        saveManifestOverride();
+        return false;
+    }
+
+    if (resourceStore->size() == 0) {
+        qWarning() << "Resource file is empty in bundle" << fileName;
+        resourceStore->close();
+        m_manifest.removeFile(fileName);
+        m_manifestDirty = true;
+        saveManifestOverride();
         return false;
     }
 
     if (!resource->loadFromDevice(resourceStore->device(),
                                   KisGlobalResourcesInterface::instance())) {
         qWarning() << "Could not load the resource from the bundle" << resourceType << fileName << m_filename;
+        resourceStore->close();
+        m_manifest.removeFile(fileName);
+        m_manifestDirty = true;
+        saveManifestOverride();
         return false;
     }
 
@@ -535,7 +896,8 @@ bool KoResourceBundle::loadResource(KoResourceSP resource)
 
     if ((resource->image().isNull() || resource->thumbnail().isNull()) && !resource->thumbnailPath().isNull()) {
 
-        if (!resourceStore->open(resourceType + '/' + resource->thumbnailPath())) {
+        const QString thumbnailPath = prefixedPath(m_rootPrefix, resourceType + '/' + resource->thumbnailPath());
+        if (!resourceStore->open(thumbnailPath)) {
             qWarning() << "Could not open thumbnail in bundle" << resource->thumbnailPath();
             return false;
         }
@@ -563,7 +925,10 @@ QString KoResourceBundle::resourceMd5(const QString &url)
         qWarning() << "Could not open store on bundle" << m_filename;
         return result;
     }
-    if (!resourceStore->open(url)) {
+    if (m_rootPrefix.isEmpty()) {
+        m_rootPrefix = ensureTrailingSlash(detectRootPrefix(resourceStore.data()));
+    }
+    if (!resourceStore->open(prefixedPath(m_rootPrefix, url))) {
         qWarning() << "Could not open file in bundle" << url;
         return result;
     }

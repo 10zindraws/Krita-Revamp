@@ -13,6 +13,8 @@
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QSet>
+#include <QUrl>
 #include <QVersionNumber>
 #include <QElapsedTimer>
 #include <QSqlQuery>
@@ -52,13 +54,36 @@ public:
     QMap<QString, KisResourceStorageSP> storages;
     QHash<QPair<QString, QString>, KoResourceSP> resourceCache;
     QMap<QPair<QString, QString>, KisTagSP> tagCache;
+    QSet<QString> ignoredMissingLinkedResources;
     QStringList errorMessages;
 };
+
+namespace {
+QString encodeSignaturePart(const QString &part)
+{
+    return QString::fromUtf8(QUrl::toPercentEncoding(part));
+}
+
+QString missingLinkKey(const KoResourceSignature &sig)
+{
+    return encodeSignaturePart(sig.type) + "|"
+        + encodeSignaturePart(sig.filename) + "|"
+        + encodeSignaturePart(sig.md5sum) + "|"
+        + encodeSignaturePart(sig.name);
+}
+} // namespace
 
 KisResourceLocator::KisResourceLocator(QObject *parent)
     : QObject(parent)
     , d(new Private())
 {
+    KConfigGroup group(KSharedConfig::openConfig(), "ResourceMissingLinks");
+    const QStringList ignored = group.readEntry("IgnoredSignatures", QStringList());
+#if QT_VERSION >= QT_VERSION_CHECK(5,14,0)
+    d->ignoredMissingLinkedResources = QSet<QString>(ignored.begin(), ignored.end());
+#else
+    d->ignoredMissingLinkedResources = QSet<QString>::fromList(ignored);
+#endif
 }
 
 KisResourceLocator *KisResourceLocator::instance()
@@ -172,9 +197,19 @@ void KisResourceLocator::loadRequiredResources(KoResourceSP resource)
                 importResource(sig.type, sig.filename, &buffer, false, "memory");
                 break;
             }
-            case KoResourceLoadResult::FailedLink:
-                qWarning() << "Failed to load" << resourceGroup << "resource:" << res.signature();
+            case KoResourceLoadResult::FailedLink: {
+                const QString key = missingLinkKey(res.signature());
+                if (!d->ignoredMissingLinkedResources.contains(key)) {
+                    qWarning() << "Failed to load" << resourceGroup << "resource:" << res.signature();
+                    d->ignoredMissingLinkedResources.insert(key);
+                    KConfigGroup group(KSharedConfig::openConfig(), "ResourceMissingLinks");
+                    QStringList ignored = d->ignoredMissingLinkedResources.values();
+                    ignored.sort();
+                    group.writeEntry("IgnoredSignatures", ignored);
+                    group.sync();
+                }
                 break;
+            }
             }
         }
     };
