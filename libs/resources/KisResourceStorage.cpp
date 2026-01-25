@@ -15,7 +15,6 @@
 #include <QRegularExpression>
 
 #include <cmath>
-#include <quazip.h>
 #include <boost/optional.hpp>
 
 #include <kis_debug.h>
@@ -92,7 +91,7 @@ KisResourceStorage::KisResourceStorage(const QString &location)
             d->storagePlugin.reset(KisStoragePluginRegistry::instance()->m_storageFactoryMap[StorageType::Bundle]->create(location));
             d->storageType = StorageType::Bundle;
             // XXX: should we also check whether there's a valid metadata entry? Or is this enough?
-            d->valid = (fi.isReadable() && QuaZip(d->location).open(QuaZip::mdUnzip));
+            d->valid = fi.isReadable();
     } else if (d->name.endsWith(".abr", Qt::CaseInsensitive)) {
             d->storagePlugin.reset(KisStoragePluginRegistry::instance()->m_storageFactoryMap[StorageType::AdobeBrushLibrary]->create(location));
             d->storageType = StorageType::AdobeBrushLibrary;

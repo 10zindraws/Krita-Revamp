@@ -9,6 +9,8 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QDirIterator>
+#include <QFileInfo>
+#include <QHash>
 #include <QStringList>
 #include <QElapsedTimer>
 #include <QDataStream>
@@ -59,6 +61,70 @@ QString changeToEmptyIfNull(QString s)
 {
     return s.isNull() ? QString("") : s;
 }
+
+namespace {
+bool s_resourceTypesChanged = false;
+
+QDateTime normalizedTimestamp(const QDateTime &timestamp)
+{
+    if (!timestamp.isValid()) {
+        return timestamp;
+    }
+    return QDateTime::fromSecsSinceEpoch(timestamp.toSecsSinceEpoch());
+}
+
+QDateTime storageContentTimestamp(const KisResourceStorageSP &storage)
+{
+    if (!storage) {
+        return QDateTime();
+    }
+
+    const QString location = storage->location();
+    QFileInfo storageInfo(location);
+    QDateTime latestTimestamp;
+
+    if (storageInfo.exists()) {
+        latestTimestamp = storageInfo.lastModified();
+    }
+
+    if (storage->type() == KisResourceStorage::StorageType::Bundle) {
+        QFileInfo modifiedInfo(location + "_modified");
+        if (modifiedInfo.exists()) {
+            const QDateTime modifiedTimestamp = modifiedInfo.lastModified();
+            if (!latestTimestamp.isValid() || modifiedTimestamp > latestTimestamp) {
+                latestTimestamp = modifiedTimestamp;
+            }
+        }
+    }
+
+    return normalizedTimestamp(latestTimestamp);
+}
+
+bool updateStorageTimestamp(const QString &storageLocation, const QDateTime &timestamp)
+{
+    if (!timestamp.isValid()) {
+        return true;
+    }
+
+    QSqlQuery q;
+    if (!q.prepare("UPDATE storages\n"
+                   "SET    timestamp = :timestamp\n"
+                   "WHERE  location = :location\n")) {
+        qWarning() << "Could not prepare update storage timestamp query" << q.lastError();
+        return false;
+    }
+
+    q.bindValue(":timestamp", timestamp.toSecsSinceEpoch());
+    q.bindValue(":location", changeToEmptyIfNull(storageLocation));
+
+    if (!q.exec()) {
+        qWarning() << "Could not execute update storage timestamp query" << q.lastError() << q.boundValues();
+        return false;
+    }
+
+    return true;
+}
+} // namespace
 
 bool updateSchemaVersion()
 {
@@ -1652,12 +1718,16 @@ QDebug operator<<(QDebug dbg, const ResourceVersion &ver)
 }
 }
 
-bool KisResourceCacheDb::synchronizeStorage(KisResourceStorageSP storage)
+bool KisResourceCacheDb::synchronizeStorage(KisResourceStorageSP storage, bool *outChanged)
 {
     QElapsedTimer t;
     t.start();
 
     QSqlDatabase::database().transaction();
+
+    if (outChanged) {
+        *outChanged = false;
+    }
 
     if (!s_valid) {
         qWarning() << "KisResourceCacheDb::addResource: The database is not valid";
@@ -1665,6 +1735,8 @@ bool KisResourceCacheDb::synchronizeStorage(KisResourceStorageSP storage)
     }
 
     bool success = true;
+    const QString storageLocation = KisResourceLocator::instance()->makeStorageLocationRelative(storage->location());
+    const QDateTime currentTimestamp = storageContentTimestamp(storage);
 
     // Find the storage in the database
     QSqlQuery q;
@@ -1676,7 +1748,7 @@ bool KisResourceCacheDb::synchronizeStorage(KisResourceStorageSP storage)
         qWarning() << "Could not prepare storage timestamp statement" << q.lastError();
     }
 
-    q.bindValue(":location", changeToEmptyIfNull(KisResourceLocator::instance()->makeStorageLocationRelative(storage->location())));
+    q.bindValue(":location", changeToEmptyIfNull(storageLocation));
     if (!q.exec()) {
         qWarning() << "Could not execute storage timestamp statement" << q.boundValues() << q.lastError();
     }
@@ -1688,84 +1760,47 @@ bool KisResourceCacheDb::synchronizeStorage(KisResourceStorageSP storage)
             qWarning() << "Could not add new storage" << storage->name() << "to the database";
             success = false;
         }
+        if (outChanged) {
+            *outChanged = true;
+        }
+        if (success && !updateStorageTimestamp(storageLocation, currentTimestamp)) {
+            success = false;
+        }
+        QSqlDatabase::database().commit();
         return true;
     }
 
     storage->setStorageId(q.value("id").toInt());
+    const QDateTime dbTimestamp = QDateTime::fromSecsSinceEpoch(q.value("timestamp").toInt());
+    const bool fileBackedStorage =
+        storage->type() == KisResourceStorage::StorageType::Bundle ||
+        storage->type() == KisResourceStorage::StorageType::AdobeBrushLibrary ||
+        storage->type() == KisResourceStorage::StorageType::AdobeStyleLibrary;
+    const bool canSkipSync =
+        fileBackedStorage &&
+        !s_resourceTypesChanged &&
+        currentTimestamp.isValid() &&
+        dbTimestamp.isValid() &&
+        currentTimestamp <= dbTimestamp;
+
+    if (canSkipSync) {
+        QSqlDatabase::database().commit();
+        return true;
+    }
+
+    if (outChanged) {
+        *outChanged = true;
+    }
 
     /// We compare resource versions one-by-one because the storage may have multiple
     /// versions of them
 
     Q_FOREACH(const QString &resourceType, KisResourceLoaderRegistry::instance()->resourceTypes()) {
 
-        /// Firstly, fetch information about the existing resources
-        /// in the storage
-
-        QVector<ResourceVersion> resourcesInStorage;
-
-        /// A fake resourceId to group resources which are not yet present
-        /// in the database. This value is always negative, therefore it
-        /// cannot overlap with normal ids.
-
-        int nextInexistentResourceId = std::numeric_limits<int>::min();
-
-        QSharedPointer<KisResourceStorage::ResourceIterator> iter = storage->resources(resourceType);
-        while (iter->hasNext()) {
-            iter->next();
-
-            const int firstResourceVersionPosition = resourcesInStorage.size();
-
-            int detectedResourceId = nextInexistentResourceId;
-            QSharedPointer<KisResourceStorage::ResourceIterator> verIt =
-                    iter->versions();
-
-            while (verIt->hasNext()) {
-                verIt->next();
-
-                // verIt->url() contains paths like "brushes/ink.png" or "brushes/subfolder/splash.png".
-                // we need to cut off the first part and get "ink.png" in the first case,
-                // but "subfolder/splash.png" in the second case in order for subfolders to work
-                // so it cannot just use QFileInfo(verIt->url()).fileName() here.
-                QString path = QDir::fromNativeSeparators(verIt->url()); // make sure it uses Unix separators
-                int folderEndIdx = path.indexOf("/");
-                QString properFilenameWithSubfolders = path.right(path.length() - folderEndIdx - 1);
-                int id = resourceIdForResource(properFilenameWithSubfolders,
-                                               verIt->type(),
-                                               KisResourceLocator::instance()->makeStorageLocationRelative(storage->location()));
-
-                ResourceVersion item;
-                item.url = verIt->url();
-                item.version = verIt->guessedVersion();
-
-                // we use lower precision than the normal QDateTime
-                item.timestamp = QDateTime::fromSecsSinceEpoch(verIt->lastModified().toSecsSinceEpoch());
-
-                item.resourceId = id;
-
-                if (detectedResourceId < 0 && id >= 0) {
-                    detectedResourceId = id;
-                }
-
-                resourcesInStorage.append(item);
-            }
-
-            /// Assign the detected resource id to all the versions of
-            /// this resource (if they are not present in the database).
-            /// If no id has been detected, then a fake one will be assigned.
-
-            for (int i = firstResourceVersionPosition; i < resourcesInStorage.size(); i++) {
-                if (resourcesInStorage[i].resourceId < 0) {
-                    resourcesInStorage[i].resourceId = detectedResourceId;
-                }
-            }
-
-            nextInexistentResourceId++;
-        }
-
-
-        /// Secondly, fetch the resources present in the database
+        /// Firstly, fetch the resources present in the database
 
         QVector<ResourceVersion> resourcesInDatabase;
+        QHash<QString, int> resourceIdByUrl;
 
         QSqlQuery q;
         q.setForwardOnly(true);
@@ -1799,6 +1834,76 @@ bool KisResourceCacheDb::synchronizeStorage(KisResourceStorageSP storage)
             item.resourceId = q.value(0).toInt();
 
             resourcesInDatabase.append(item);
+            if (!resourceIdByUrl.contains(item.url)) {
+                resourceIdByUrl.insert(item.url, item.resourceId);
+            }
+        }
+
+        /// Secondly, fetch information about the existing resources
+        /// in the storage
+
+        QVector<ResourceVersion> resourcesInStorage;
+
+        /// A fake resourceId to group resources which are not yet present
+        /// in the database. This value is always negative, therefore it
+        /// cannot overlap with normal ids.
+
+        int nextInexistentResourceId = std::numeric_limits<int>::min();
+
+        QSharedPointer<KisResourceStorage::ResourceIterator> iter = storage->resources(resourceType);
+        while (iter->hasNext()) {
+            iter->next();
+
+            const int firstResourceVersionPosition = resourcesInStorage.size();
+
+            int detectedResourceId = nextInexistentResourceId;
+            QSharedPointer<KisResourceStorage::ResourceIterator> verIt =
+                    iter->versions();
+
+            while (verIt->hasNext()) {
+                verIt->next();
+
+                // verIt->url() contains paths like "brushes/ink.png" or "brushes/subfolder/splash.png".
+                // we need to cut off the first part and get "ink.png" in the first case,
+                // but "subfolder/splash.png" in the second case in order for subfolders to work
+                // so it cannot just use QFileInfo(verIt->url()).fileName() here.
+                QString path = QDir::fromNativeSeparators(verIt->url()); // make sure it uses Unix separators
+                int folderEndIdx = path.indexOf("/");
+                QString properFilenameWithSubfolders = path.right(path.length() - folderEndIdx - 1);
+                int id = resourceIdByUrl.value(resourceType + "/" + properFilenameWithSubfolders, -1);
+                if (id < 0) {
+                    id = resourceIdForResource(properFilenameWithSubfolders,
+                                               verIt->type(),
+                                               KisResourceLocator::instance()->makeStorageLocationRelative(storage->location()));
+                }
+
+                ResourceVersion item;
+                item.url = verIt->url();
+                item.version = verIt->guessedVersion();
+
+                // we use lower precision than the normal QDateTime
+                item.timestamp = QDateTime::fromSecsSinceEpoch(verIt->lastModified().toSecsSinceEpoch());
+
+                item.resourceId = id;
+
+                if (detectedResourceId < 0 && id >= 0) {
+                    detectedResourceId = id;
+                }
+
+                resourcesInStorage.append(item);
+            }
+
+            /// Assign the detected resource id to all the versions of
+            /// this resource (if they are not present in the database).
+            /// If no id has been detected, then a fake one will be assigned.
+
+            for (int i = firstResourceVersionPosition; i < resourcesInStorage.size(); i++) {
+                if (resourcesInStorage[i].resourceId < 0) {
+                    resourcesInStorage[i].resourceId = detectedResourceId;
+                }
+            }
+
+            nextInexistentResourceId++;
         }
 
         QSet<int> resourceIdForUpdate;
@@ -1920,6 +2025,10 @@ bool KisResourceCacheDb::synchronizeStorage(KisResourceStorageSP storage)
         }
     }
 
+    if (success && !updateStorageTimestamp(storageLocation, currentTimestamp)) {
+        success = false;
+    }
+
     QSqlDatabase::database().commit();
     debugResource << "Synchronizing the storages took" << t.elapsed() << "milliseconds for" << storage->location();
 
@@ -2028,6 +2137,7 @@ bool KisResourceCacheDb::registerResourceType(const QString &resourceType)
             qWarning() << "Could not insert" << resourceType << q.lastError();
             return false;
         }
+        s_resourceTypesChanged = true;
         return true;
     }
     qWarning() << "Could not open fill_resource_types.sql";

@@ -28,6 +28,8 @@ public:
 
     KisBundleStorage *q;
     QScopedPointer<KoResourceBundle> bundle;
+    mutable bool loadAttempted {false};
+    mutable bool loaded {false};
 };
 
 
@@ -78,15 +80,19 @@ private:
     KisTagSP m_tag;
 };
 
+class EmptyTagIterator : public KisResourceStorage::TagIterator
+{
+public:
+    bool hasNext() const override { return false; }
+    void next() override {}
+    KisTagSP tag() const override { return KisTagSP(); }
+};
 
 KisBundleStorage::KisBundleStorage(const QString &location)
     : KisStoragePlugin(location)
     , d(new Private(this))
 {
     d->bundle.reset(new KoResourceBundle(location));
-    if (!d->bundle->load()) {
-        qWarning() << "Could not load bundle" << location;
-    }
 }
 
 KisBundleStorage::~KisBundleStorage()
@@ -107,6 +113,22 @@ KisResourceStorage::ResourceItem KisBundleStorage::resourceItem(const QString &u
     item.resourceType = parts[0];
     item.lastModified = QFileInfo(d->bundle->filename()).lastModified();
     return item;
+}
+
+bool KisBundleStorage::ensureLoaded() const
+{
+    if (d->loaded) {
+        return true;
+    }
+    if (d->loadAttempted) {
+        return false;
+    }
+    d->loadAttempted = true;
+    d->loaded = d->bundle->load();
+    if (!d->loaded) {
+        qWarning() << "Could not load bundle" << location();
+    }
+    return d->loaded;
 }
 
 bool KisBundleStorage::loadVersionedResource(KoResourceSP resource)
@@ -147,6 +169,9 @@ bool KisBundleStorage::loadVersionedResource(KoResourceSP resource)
     }
 
     if (!foundVersionedFile) {
+        if (!ensureLoaded()) {
+            return false;
+        }
         d->bundle->loadResource(resource);
     }
 
@@ -161,6 +186,9 @@ QString KisBundleStorage::resourceMd5(const QString &url)
     if (modifiedFile.exists() && modifiedFile.open(QIODevice::ReadOnly)) {
         result = KoMD5Generator::generateHash(modifiedFile.readAll());
     } else {
+        if (!ensureLoaded()) {
+            return QString();
+        }
         result = d->bundle->resourceMd5(url);
     }
 
@@ -170,6 +198,10 @@ QString KisBundleStorage::resourceMd5(const QString &url)
 QSharedPointer<KisResourceStorage::ResourceIterator> KisBundleStorage::resources(const QString &resourceType)
 {
     QVector<VersionedResourceEntry> entries;
+
+    if (!ensureLoaded()) {
+        return toQShared(new KisVersionedStorageIterator(entries, this));
+    }
 
     QList<KoResourceBundleManifest::ResourceReference> references =
         d->bundle->manifest().files(resourceType);
@@ -217,11 +249,17 @@ QSharedPointer<KisResourceStorage::ResourceIterator> KisBundleStorage::resources
 
 QSharedPointer<KisResourceStorage::TagIterator> KisBundleStorage::tags(const QString &resourceType)
 {
+    if (!ensureLoaded()) {
+        return QSharedPointer<KisResourceStorage::TagIterator>(new EmptyTagIterator());
+    }
     return QSharedPointer<KisResourceStorage::TagIterator>(new BundleTagIterator(d->bundle.data(), resourceType));
 }
 
 QImage KisBundleStorage::thumbnail() const
 {
+    if (!ensureLoaded()) {
+        return QImage();
+    }
     return d->bundle->image();
 }
 
@@ -245,6 +283,9 @@ QStringList KisBundleStorage::metaDataKeys() const
 
 QVariant KisBundleStorage::metaData(const QString &key) const
 {
+    if (!ensureLoaded()) {
+        return QVariant();
+    }
     return d->bundle->metaData(key);
 }
 

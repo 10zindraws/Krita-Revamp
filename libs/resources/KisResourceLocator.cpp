@@ -1219,13 +1219,22 @@ bool KisResourceLocator::synchronizeDb()
 
 
     findStorages();
+    QSet<QString> storagesNeedingTags;
     Q_FOREACH(const KisResourceStorageSP storage, d->storages) {
-        if (!KisResourceCacheDb::synchronizeStorage(storage)) {
+        bool changed = false;
+        if (!KisResourceCacheDb::synchronizeStorage(storage, &changed)) {
             d->errorMessages.append(i18n("Could not synchronize %1 with the database", storage->location()));
+            continue;
+        }
+        if (changed) {
+            storagesNeedingTags.insert(storage->location());
         }
     }
 
     Q_FOREACH(const KisResourceStorageSP storage, d->storages) {
+        if (!storagesNeedingTags.contains(storage->location())) {
+            continue;
+        }
         if (!KisResourceCacheDb::addStorageTags(storage)) {
             d->errorMessages.append(i18n("Could not synchronize %1 with the database", storage->location()));
         }

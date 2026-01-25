@@ -40,6 +40,7 @@ public:
 
 private:
     friend class BundleIterator;
+    bool ensureLoaded() const;
 
 private:
     class Private;
