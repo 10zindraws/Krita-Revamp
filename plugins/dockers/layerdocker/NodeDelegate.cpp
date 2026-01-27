@@ -16,6 +16,7 @@
 
 #include <QtDebug>
 #include <QApplication>
+#include <QAbstractItemModel>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QModelIndex>
@@ -25,6 +26,7 @@
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QBitmap>
+#include <QPixmap>
 #include <QToolTip>
 
 #include <klocalizedstring.h>
@@ -78,6 +80,25 @@ int rowHeightForIndex(const QModelIndex &index, int baseRowHeight)
         kGroupRowHeightDenominator;
     return qMax(1, scaled);
 }
+
+QPixmap tintIconPixmap(const QPixmap &source, const QColor &color)
+{
+    if (source.isNull()) {
+        return source;
+    }
+
+    QPixmap tinted(source.size());
+    tinted.fill(Qt::transparent);
+
+    QPainter painter(&tinted);
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.drawPixmap(0, 0, source);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(tinted.rect(), color);
+    painter.end();
+
+    return tinted;
+}
 } // namespace
 
 class NodeDelegate::Private
@@ -126,6 +147,11 @@ public:
     void getSiblingsIndex(QList<QModelIndex> &items, const QModelIndex &index);
     boost::optional<KisBaseNode::Property>
     propForMousePos(const QModelIndex &index, const QPoint &mousePos, const QStyleOptionViewItem &option);
+
+    int alphaInheritanceIndentation() const;
+    bool isBottomLayerIndex(const QModelIndex &index) const;
+    bool shouldApplyAlphaInheritanceAppearance(const QModelIndex &index) const;
+    QRect adjustedOptionRect(const QStyleOptionViewItem &option, const QModelIndex &index) const;
 };
 
 NodeDelegate::NodeDelegate(NodeView *view, QObject *parent)
@@ -203,10 +229,12 @@ void NodeDelegate::drawBranches(QPainter *p, const QStyleOptionViewItem &option,
     if (!tmp.isValid()) return;
 
     const KisNodeViewColorScheme &scm = *KisNodeViewColorScheme::instance();
+    const bool showAlphaInheritance = d->shouldApplyAlphaInheritanceAppearance(index);
 
     int rtlNum = (option.direction == Qt::RightToLeft) ? 1 : -1;
     QPoint nodeCorner = (option.direction == Qt::RightToLeft) ? option.rect.topLeft() : option.rect.topRight();
-    int branchSpacing = rtlNum * d->view->indentation();
+    const int indentation = d->view->indentation();
+    int branchSpacing = rtlNum * indentation;
 
     QPoint base = nodeCorner + 0.5 * QPoint(branchSpacing, option.rect.height()) + QPoint(0, scm.iconSize()/4);
 
@@ -220,10 +248,37 @@ void NodeDelegate::drawBranches(QPainter *p, const QStyleOptionViewItem &option,
     // p->setPen(QPen(p->pen().color(), 2, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
     p->setPen(QPen(color, 0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 
-    QPoint p2 = base - QPoint(rtlNum*(qMin(d->view->indentation(), scm.iconSize())/2), 0);
+    QPoint p2 = base - QPoint(rtlNum*(qMin(indentation, scm.iconSize())/2), 0);
     QPoint p3 = base - QPoint(0, scm.iconSize()/2);
-    p->drawLine(base, p2);
-    p->drawLine(base, p3);
+
+    if (showAlphaInheritance) {
+        const int rowHeight = rowHeightForIndex(index, d->rowHeight);
+        const int indentWidth = qMax(1, indentation);
+        const int maxIconSize = qMax(1, qMin(indentWidth, rowHeight - 2 * scm.border()));
+        const int iconSide = qMin(scm.iconSize(), maxIconSize);
+
+        if (iconSide > 0) {
+            QIcon icon = KisIconUtils::loadIcon(QStringLiteral("arrow-topleft"));
+            QPixmap pixmap = icon.pixmap(iconSide, iconSide,
+                                         (option.state & QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled);
+            pixmap = tintIconPixmap(pixmap, option.palette.color(QPalette::Text));
+
+            QRect iconRect(0, 0, iconSide, iconSide);
+            const int halfSpacing = qRound(branchSpacing / 2.0);
+            iconRect.moveCenter(QPoint(nodeCorner.x() + halfSpacing, option.rect.center().y()));
+
+            const qreal oldOpacity = p->opacity();
+            if (!(option.state & QStyle::State_Enabled)) {
+                p->setOpacity(0.55);
+            }
+
+            p->drawPixmap(iconRect.topLeft(), pixmap);
+            p->setOpacity(oldOpacity);
+        }
+    } else {
+        p->drawLine(base, p2);
+        p->drawLine(base, p3);
+    }
 
     // draw parent lines (keep drawing until x position is less than 0
     QPoint parentBase1 = base + QPoint(branchSpacing, 0);
@@ -307,18 +362,88 @@ void NodeDelegate::drawFrame(QPainter *p, const QStyleOptionViewItem &option, co
 QRect NodeDelegate::thumbnailClickRect(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     QRect rc = d->thumbnailGeometry;
+    const QRect optionRect = d->adjustedOptionRect(option, index);
     rc.setHeight(rowHeightForIndex(index, d->rowHeight));
 
     // Move to current index
-    rc.moveTop(option.rect.topLeft().y());
+    rc.moveTop(optionRect.topLeft().y());
     // Move to correct location.
     if (option.direction == Qt::RightToLeft) {
-        rc.moveRight(option.rect.right());
+        rc.moveRight(optionRect.right());
     } else {
-        rc.moveLeft(option.rect.left());
+        rc.moveLeft(optionRect.left());
     }
 
     return rc;
+}
+
+int NodeDelegate::Private::alphaInheritanceIndentation() const
+{
+    const int indentation = view ? view->indentation() : 0;
+    if (indentation <= 0) {
+        return 0;
+    }
+
+    return qMax(1, qRound(indentation * 0.7));
+}
+
+bool NodeDelegate::Private::isBottomLayerIndex(const QModelIndex &index) const
+{
+    if (!index.isValid()) {
+        return true;
+    }
+
+    const QAbstractItemModel *model = index.model();
+    if (!model) {
+        return true;
+    }
+
+    const QModelIndex parentIndex = index.parent();
+    const int rowCount = model->rowCount(parentIndex);
+    if (rowCount <= 0) {
+        return true;
+    }
+
+    return index.row() >= (rowCount - 1);
+}
+
+bool NodeDelegate::Private::shouldApplyAlphaInheritanceAppearance(const QModelIndex &index) const
+{
+    if (!index.isValid() || isBottomLayerIndex(index)) {
+        return false;
+    }
+
+    const KisBaseNode::PropertyList props =
+        index.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
+
+    for (const auto &prop : props) {
+        if (prop.id == KisLayerPropertiesIcons::inheritAlpha.id()) {
+            return prop.state.toBool();
+        }
+    }
+
+    return false;
+}
+
+QRect NodeDelegate::Private::adjustedOptionRect(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QRect rect = option.rect;
+    if (!shouldApplyAlphaInheritanceAppearance(index)) {
+        return rect;
+    }
+
+    const int extraIndent = alphaInheritanceIndentation();
+    if (extraIndent <= 0) {
+        return rect;
+    }
+
+    if (option.direction == Qt::RightToLeft) {
+        rect.adjust(0, 0, -extraIndent, 0);
+    } else {
+        rect.adjust(extraIndent, 0, 0, 0);
+    }
+
+    return rect;
 }
 
 void NodeDelegate::drawThumbnail(QPainter *p, const QStyleOptionViewItem &option, const QModelIndex &index) const
@@ -326,6 +451,38 @@ void NodeDelegate::drawThumbnail(QPainter *p, const QStyleOptionViewItem &option
     KisNodeViewColorScheme scm;
 
     const qreal oldOpacity = p->opacity(); // remember previous opacity
+
+    if (d->shouldApplyAlphaInheritanceAppearance(index) && !index.parent().isValid()) {
+        const int extraIndent = d->alphaInheritanceIndentation();
+        const int rowHeight = rowHeightForIndex(index, d->rowHeight);
+        const int iconSide = qMin(scm.iconSize(), qMax(1, qMin(extraIndent, rowHeight - 2 * scm.border())));
+
+        if (extraIndent > 0 && iconSide > 0) {
+            QRect indentRect = option.rect;
+            if (option.direction == Qt::RightToLeft) {
+                indentRect.setLeft(option.rect.right() - extraIndent + 1);
+                indentRect.setWidth(extraIndent);
+            } else {
+                indentRect.setWidth(extraIndent);
+            }
+
+            QIcon icon = KisIconUtils::loadIcon(QStringLiteral("arrow-topleft"));
+            QPixmap pixmap = icon.pixmap(iconSide, iconSide,
+                                         (option.state & QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled);
+            pixmap = tintIconPixmap(pixmap, option.palette.color(QPalette::Text));
+
+            QRect iconRect(0, 0, iconSide, iconSide);
+            iconRect.moveCenter(QPoint(indentRect.center().x(), option.rect.center().y()));
+
+            const qreal oldArrowOpacity = p->opacity();
+            if (!(option.state & QStyle::State_Enabled)) {
+                p->setOpacity(0.55);
+            }
+
+            p->drawPixmap(iconRect.topLeft(), pixmap);
+            p->setOpacity(oldArrowOpacity);
+        }
+    }
 
     if (!(option.state & QStyle::State_Enabled)) {
         p->setOpacity(0.35);
@@ -843,15 +1000,16 @@ QRect NodeDelegate::decorationClickRect(const QStyleOptionViewItem &option, cons
     KisNodeViewColorScheme scm;
 
     QRect rc = scm.relDecorationRect();
+    const QRect optionRect = d->adjustedOptionRect(option, index);
 
     // Move to current index
-    rc.moveTop(option.rect.topLeft().y());
+    rc.moveTop(optionRect.topLeft().y());
     rc.setHeight(rowHeightForIndex(index, d->rowHeight));
     // Move to correct location.
     if (option.direction == Qt::RightToLeft) {
-        rc.moveRight(option.rect.right() - d->thumbnailGeometry.width());
+        rc.moveRight(optionRect.right() - d->thumbnailGeometry.width());
     } else {
-        rc.moveLeft(option.rect.left() + d->thumbnailGeometry.width());
+        rc.moveLeft(optionRect.left() + d->thumbnailGeometry.width());
     }
 
     return rc;
