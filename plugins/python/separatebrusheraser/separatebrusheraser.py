@@ -139,7 +139,9 @@ class SeparateBrushEraserExtension(Extension):
         print_dbg(f"[maybe_switch_tag] From preset: '{from_preset_name}', tags: {from_tags}")
         print_dbg(f"[maybe_switch_tag] To preset: '{to_preset_name}', tags: {to_tags}")
         if not to_tags:
-            print_dbg(f"[maybe_switch_tag] Target preset has no tags, skipping")
+            # Target preset has no dedicated tags, switch to "All" tag
+            print_dbg(f"[maybe_switch_tag] Target preset has no tags, switching to 'All'")
+            QTimer.singleShot(0, lambda: self.switch_to_tag("All"))
             return
         target_tag = to_tags[0]  # Capture the tag value before lambda
         if not from_tags:
@@ -180,19 +182,18 @@ class SeparateBrushEraserExtension(Extension):
 
         # toggling the eraser on
         if state.eraser_on:
-            state.eraser_settings.applySettings()
             state.brush_settings = current_settings
-            eraser_preset_name = self.preset_name(state.eraser_settings.preset) if state.eraser_settings else ""
-            print_dbg(f"[apply_brush_state] Switching TO eraser, eraser preset: {eraser_preset_name}")
-            if state.eraser_settings and state.eraser_settings.preset:
-                self.maybe_switch_tag(current_preset_name, eraser_preset_name)
+            state.eraser_settings.applySettings()
+            target_preset_name = self.preset_name(state.eraser_settings.preset)
+            print_dbg(f"[apply_brush_state] Switching TO eraser, target preset: {target_preset_name}")
         else:
             state.eraser_settings = current_settings
             state.brush_settings.applySettings()
-            brush_preset_name = self.preset_name(state.brush_settings.preset) if state.brush_settings else ""
-            print_dbg(f"[apply_brush_state] Switching TO brush, brush preset: {brush_preset_name}")
-            if state.brush_settings and state.brush_settings.preset:
-                self.maybe_switch_tag(current_preset_name, brush_preset_name)
+            target_preset_name = self.preset_name(state.brush_settings.preset)
+            print_dbg(f"[apply_brush_state] Switching TO brush, target preset: {target_preset_name}")
+
+        if target_preset_name:
+            self.maybe_switch_tag(current_preset_name, target_preset_name)
         self.verify_eraser_state()
         return state
 
