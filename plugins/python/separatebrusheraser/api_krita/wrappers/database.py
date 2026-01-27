@@ -59,6 +59,24 @@ class Database:
         '''
         return self._single_column_query(sql_query, "preset")
 
+    def get_tags_for_preset(self, preset_name: str) -> List[str]:
+        """Return list of all tag urls that contain the given preset."""
+        preset_name = preset_name.replace("\"", "\"\"")
+        sql_query = f'''
+            SELECT DISTINCT t.url AS tag
+            FROM tags t
+                JOIN resource_tags rt
+                    ON t.id = rt.tag_id
+                JOIN resources r
+                    ON r.id = rt.resource_id
+            WHERE
+                r.name = "{preset_name}"
+                AND rt.active = 1
+                AND t.active = 1
+                AND t.resource_type_id = 5
+        '''
+        return self._single_column_query(sql_query, "tag")
+
     def get_brush_tags(self) -> List[str]:
         "Return list of all tag names."
         sql_query = '''

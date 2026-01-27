@@ -200,8 +200,6 @@ void KisPresetDelegate::paintThumbnail(QPainter *painter, const QStyleOptionView
 
 void KisPresetDelegate::paintStrokePreview(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    bool dirty = index.data(Qt::UserRole + KisAbstractResourceModel::Dirty).toBool();
-
     KoResourceSP resource;
     const KisAbstractResourceModel *resourceModel = dynamic_cast<const KisAbstractResourceModel*>(index.model());
     if (resourceModel) {
@@ -276,9 +274,6 @@ void KisPresetDelegate::paintStrokePreview(QPainter *painter, const QStyleOption
     QString presetDisplayName = index.data(Qt::UserRole + KisAbstractResourceModel::Name)
                                     .toString()
                                     .replace(QLatin1Char('_'), QLatin1Char(' '));
-    if (dirty) {
-        presetDisplayName.append(QLatin1Char('*'));
-    }
     QString elidedName = fm.elidedText(presetDisplayName, Qt::ElideRight, innerRect.width() - 14);
 
     QRect textRect = innerRect;
@@ -287,12 +282,6 @@ void KisPresetDelegate::paintStrokePreview(QPainter *painter, const QStyleOption
     textRect.setBottom(innerRect.bottom() - bottomPadding);
     painter->setPen(textColor);
     painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedName);
-
-    if (dirty) {
-        const QIcon icon = KisIconUtils::loadIcon(QStringLiteral("dirty-preset"));
-        QPixmap pixmap = icon.pixmap(QSize(16, 16));
-        painter->drawPixmap(innerRect.x() + 3, innerRect.y() + 3, pixmap);
-    }
 
     // Note: BrokenStatus not available in Krita 5.2.14 resource model
 

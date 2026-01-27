@@ -34,6 +34,7 @@
 #include <widgets/kis_preset_chooser.h>
 #include <KisResourceUserOperations.h>
 #include <KisResourceItemChooser.h>
+#include <KisPaintOpPresetSessionStorage.h>
 
 #include <ui_wdgpaintopsettings.h>
 #include <kis_node.h>
@@ -749,20 +750,34 @@ void KisPaintOpPresetsEditor::slotUpdatePaintOpFilter() {
 }
 
 void KisPaintOpPresetsEditor::slotSaveBrushPreset() {
-    // here we are assuming that people want to keep their existing preset icon. We will just update the
-    // settings and save a new copy with the same name.
-    // there is a dialog with save options, but we don't need to show it in this situation
+    KisPaintOpPresetSP curPreset = m_d->resourceProvider->currentPreset();
+    if (!curPreset) {
+        return;
+    }
 
-    saveDialog->useNewBrushDialog(false); // this mostly just makes sure we keep the existing brush preset name when saving
-    const QImage thumbImage = m_d->resourceProvider->currentPreset() ? m_d->resourceProvider->currentPreset()->image() : QImage();
-    saveDialog->brushPresetThumbnailWidget->setPresetImage(thumbImage);
-    saveDialog->saveScratchPadThumbnailArea(m_d->uiWdgPaintOpPresetSettings.scratchPad->cutoutOverlay());
-    saveDialog->loadExistingThumbnail(); // This makes sure we use the existing preset icon when updating the existing brush preset
-    saveDialog->showDialog();
+    // Keep the existing preset name and icon - just update the settings
+    QString presetFileName = curPreset->name();
+    presetFileName = presetFileName.replace(' ', '_').replace('.', '_');
+    QString extension = curPreset->defaultFileExtension();
 
-    // refresh the view settings so the brush doesn't appear dirty
-    // tiar 2021: I'm not sure if it's needed anymore; seems to work without it...
-    slotUpdatePresetSettings();
+    if (!presetFileName.endsWith(extension)) {
+        presetFileName.append(extension);
+    }
+
+    // Ensure the filename is valid for serialization -- BUG 445282
+    curPreset->setFilename(presetFileName);
+
+    const bool success = KisResourceUserOperations::updateResourceWithUserInput(
+        this,
+        curPreset);
+
+    if (success) {
+        // Clear session tweaks since the saved version is now the baseline
+        KisPaintOpPresetSessionStorage::instance()->clearTweaks(curPreset);
+
+        // Refresh the view settings so the brush doesn't appear dirty
+        slotUpdatePresetSettings();
+    }
 }
 
 void KisPaintOpPresetsEditor::slotSaveNewBrushPreset() {

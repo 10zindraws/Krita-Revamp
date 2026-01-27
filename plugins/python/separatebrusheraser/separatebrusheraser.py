@@ -1,8 +1,9 @@
 from krita import *
-from PyQt5.QtWidgets import QWidget, QAction
+from PyQt5.QtWidgets import QWidget, QAction, QComboBox
 from functools import partial
 from pprint import pprint
 from .api_krita import Krita as KritaAPI
+from .api_krita.wrappers.database import Database
 
 KRITA_ERASE_ACTION = "erase_action"
 BRUSH_ACTION = "dninosores_activate_brush"
@@ -58,6 +59,100 @@ class SeparateBrushEraserExtension(Extension):
     def eraser_active(self):
         return Application.action(KRITA_ERASE_ACTION).isChecked()
 
+    def preset_name(self, preset):
+        """Normalize preset name from Krita API objects or strings."""
+        if not preset:
+            return ""
+        if isinstance(preset, str):
+            return preset
+        if hasattr(preset, "name"):
+            try:
+                return preset.name()
+            except TypeError:
+                return preset.name
+        return str(preset)
+
+    def get_preset_docker(self):
+        """Find the Brush Presets docker widget."""
+        for docker in Krita.instance().dockers():
+            if docker.objectName() == "PresetDocker":
+                return docker
+        return None
+
+    def switch_to_tag(self, tag_url: str):
+        """Switch the Brush Presets docker to a specific tag url."""
+        if not tag_url:
+            return
+        docker = self.get_preset_docker()
+        if not docker:
+            print_dbg(f"[Tag Switch] Docker not found")
+            return
+
+        # Find KisTagChooserWidget by looking for its internal QComboBox
+        # The hierarchy is: docker > KisPaintOpPresetsChooserPopup > KisPresetChooser >
+        # KisResourceItemChooser > ... > KisTagChooserWidget > QComboBox
+        # We search the entire docker for QComboBox instances and identify the tag combo
+        # by checking if the first item's URL (Qt::UserRole + 1) is "All"
+        combos = docker.findChildren(QComboBox)
+        print_dbg(f"[Tag Switch] Found {len(combos)} combo boxes in docker")
+
+        tag_combo = None
+        for combo in combos:
+            model = combo.model()
+            if not model or model.rowCount() <= 0:
+                continue
+            # Check if first item has "All" as URL (UserRole + 1 = Url column in KisTagModel)
+            first_url = model.data(model.index(0, 0), Qt.UserRole + 1)
+            if first_url == "All":
+                tag_combo = combo
+                print_dbg(f"[Tag Switch] Found tag combo box (first URL = 'All')")
+                break
+
+        if not tag_combo:
+            print_dbg(f"[Tag Switch] Tag combo box not found")
+            return
+
+        model = tag_combo.model()
+        print_dbg(f"[Tag Switch] Looking for tag URL: '{tag_url}' in {model.rowCount()} rows")
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            row_url = model.data(index, Qt.UserRole + 1)  # Url column
+            print_dbg(f"[Tag Switch]   Row {row}: URL = '{row_url}'")
+            if row_url == tag_url:
+                if tag_combo.currentIndex() != row:
+                    print_dbg(f"[Tag Switch] Switching from row {tag_combo.currentIndex()} to row {row}")
+                    tag_combo.setCurrentIndex(row)
+                else:
+                    print_dbg(f"[Tag Switch] Already on correct tag (row {row})")
+                return
+        print_dbg(f"[Tag Switch] Tag URL '{tag_url}' not found in combo")
+
+    def maybe_switch_tag(self, from_preset_name: str, to_preset_name: str):
+        """Switch tags only when presets are not in any shared tag."""
+        print_dbg(f"[maybe_switch_tag] Called with from='{from_preset_name}', to='{to_preset_name}'")
+        if not to_preset_name:
+            print_dbg(f"[maybe_switch_tag] No target preset name")
+            return
+        with Database() as db:
+            to_tags = db.get_tags_for_preset(to_preset_name)
+            from_tags = set(db.get_tags_for_preset(from_preset_name)) if from_preset_name else set()
+        print_dbg(f"[maybe_switch_tag] From preset: '{from_preset_name}', tags: {from_tags}")
+        print_dbg(f"[maybe_switch_tag] To preset: '{to_preset_name}', tags: {to_tags}")
+        if not to_tags:
+            print_dbg(f"[maybe_switch_tag] Target preset has no tags, skipping")
+            return
+        target_tag = to_tags[0]  # Capture the tag value before lambda
+        if not from_tags:
+            print_dbg(f"[maybe_switch_tag] Source has no tags, switching to: {target_tag}")
+            QTimer.singleShot(0, lambda t=target_tag: self.switch_to_tag(t))
+            return
+        for tag in to_tags:
+            if tag in from_tags:
+                print_dbg(f"[maybe_switch_tag] Presets share tag: {tag}, not switching")
+                return
+        print_dbg(f"[maybe_switch_tag] No shared tags, switching to: {target_tag}")
+        QTimer.singleShot(0, lambda t=target_tag: self.switch_to_tag(t))
+
     def get_current_brush_state(self):
         if (not KritaAPI.get_active_view() or not Application.activeWindow().
                 activeView().currentBrushPreset()):
@@ -74,17 +169,30 @@ class SeparateBrushEraserExtension(Extension):
 
     def apply_brush_state(self, state: BrushState) -> BrushState:
         """Sets brush settings to match the given state"""
+        print_dbg(f"[apply_brush_state] eraser_active={self.eraser_active()}, state.eraser_on={state.eraser_on}")
         if self.eraser_active() == state.eraser_on:
+            print_dbg(f"[apply_brush_state] States match, no change needed")
             return state
 
         current_settings = BrushSettings().loadSettings()
+        current_preset_name = self.preset_name(current_settings.preset)
+        print_dbg(f"[apply_brush_state] Current preset: {current_preset_name}")
+
         # toggling the eraser on
         if state.eraser_on:
             state.eraser_settings.applySettings()
             state.brush_settings = current_settings
+            eraser_preset_name = self.preset_name(state.eraser_settings.preset) if state.eraser_settings else ""
+            print_dbg(f"[apply_brush_state] Switching TO eraser, eraser preset: {eraser_preset_name}")
+            if state.eraser_settings and state.eraser_settings.preset:
+                self.maybe_switch_tag(current_preset_name, eraser_preset_name)
         else:
             state.eraser_settings = current_settings
             state.brush_settings.applySettings()
+            brush_preset_name = self.preset_name(state.brush_settings.preset) if state.brush_settings else ""
+            print_dbg(f"[apply_brush_state] Switching TO brush, brush preset: {brush_preset_name}")
+            if state.brush_settings and state.brush_settings.preset:
+                self.maybe_switch_tag(current_preset_name, brush_preset_name)
         self.verify_eraser_state()
         return state
 
