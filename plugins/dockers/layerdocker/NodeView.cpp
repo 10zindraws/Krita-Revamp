@@ -97,7 +97,7 @@ bool hasInheritAlpha(const QModelIndex &index)
 
 bool isClippingMaskGroupIndex(const QModelIndex &index)
 {
-    if (!index.isValid() || !isGroupLayerIndex(index)) {
+    if (!index.isValid()) {
         return false;
     }
 
@@ -106,7 +106,12 @@ bool isClippingMaskGroupIndex(const QModelIndex &index)
         return false;
     }
 
-    const QModelIndex topChild = index.model()->index(0, 0, index);
+    const QModelIndex columnIndex = index.sibling(index.row(), 0);
+    if (!columnIndex.isValid() || !isGroupLayerIndex(columnIndex)) {
+        return false;
+    }
+
+    const QModelIndex topChild = columnIndex.model()->index(0, 0, columnIndex);
     if (!topChild.isValid()) {
         return false;
     }

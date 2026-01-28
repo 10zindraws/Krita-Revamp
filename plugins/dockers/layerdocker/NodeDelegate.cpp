@@ -468,11 +468,16 @@ bool NodeDelegate::Private::hasInheritAlpha(const QModelIndex &index) const
 
 bool NodeDelegate::Private::isClippingMaskGroupIndex(const QModelIndex &index) const
 {
-    if (!clippingMaskViewEnabled || !index.isValid() || !isGroupLayerIndex(index)) {
+    if (!clippingMaskViewEnabled || !index.isValid()) {
         return false;
     }
 
-    const QModelIndex topChild = index.model()->index(0, 0, index);
+    const QModelIndex columnIndex = index.sibling(index.row(), 0);
+    if (!columnIndex.isValid() || !isGroupLayerIndex(columnIndex)) {
+        return false;
+    }
+
+    const QModelIndex topChild = columnIndex.model()->index(0, 0, columnIndex);
     if (!topChild.isValid()) {
         return false;
     }
