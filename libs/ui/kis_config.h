@@ -491,6 +491,9 @@ public:
     bool hidePopups(bool defaultValue = false) const;
     void setHidePopups(bool hidePopups);
 
+    bool clippingMaskViewEnabled(bool defaultValue = false) const;
+    void setClippingMaskViewEnabled(bool enabled);
+
     int numDefaultLayers(bool defaultValue = false) const;
     void setNumDefaultLayers(int num);
 

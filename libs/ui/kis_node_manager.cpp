@@ -51,6 +51,7 @@
 #include "kis_group_layer.h"
 #include "kis_layer_manager.h"
 #include "kis_selection_manager.h"
+#include "kis_config.h"
 #include "kis_node_commands_adapter.h"
 #include "kis_action.h"
 #include "kis_action_manager.h"
@@ -79,6 +80,51 @@
 #include <libs/image/kis_layer_properties_icons.h>
 #include <libs/image/commands/kis_node_property_list_command.h>
 #include <KisSynchronizedConnection.h>
+
+namespace {
+bool hasInheritAlpha(KisNodeSP node)
+{
+    if (!node) {
+        return false;
+    }
+
+    return KisLayerPropertiesIcons::nodeProperty(
+               node, KisLayerPropertiesIcons::inheritAlpha, false).toBool();
+}
+
+bool isClippingMaskGroup(KisNodeSP group)
+{
+    if (!group || !group->inherits("KisGroupLayer")) {
+        return false;
+    }
+
+    KisNodeSP topChild = group->lastChild();
+    return topChild && hasInheritAlpha(topChild);
+}
+
+KisNodeSP nodeAboveInsertion(KisNodeSP parent, KisNodeSP aboveThis)
+{
+    if (!parent) {
+        return KisNodeSP();
+    }
+
+    if (aboveThis) {
+        return aboveThis->nextSibling();
+    }
+
+    return parent->firstChild();
+}
+
+bool shouldEnableInheritAlphaForDrop(KisNodeSP parent, KisNodeSP aboveThis)
+{
+    if (!isClippingMaskGroup(parent)) {
+        return false;
+    }
+
+    KisNodeSP aboveNode = nodeAboveInsertion(parent, aboveThis);
+    return aboveNode && hasInheritAlpha(aboveNode);
+}
+} // namespace
 
 struct KisNodeManager::Private {
 
@@ -529,21 +575,51 @@ void KisNodeManager::moveNodesDirect(KisNodeList nodes, KisNodeSP parent, KisNod
 {
     KUndo2MagicString actionName = kundo2_i18n("Move Nodes");
     KisNodeJugglerCompressed *juggler = m_d->lazyGetJuggler(actionName);
-    juggler->moveNode(nodes, parent, aboveThis);
+    bool enableInheritAlpha = false;
+    KisConfig cfg(true);
+    if (cfg.clippingMaskViewEnabled() && parent && isClippingMaskGroup(parent)) {
+        KisNodeSP topChild = parent->lastChild();
+        if (topChild && aboveThis == topChild && parent->parent()) {
+            aboveThis = parent;
+            parent = parent->parent();
+        }
+        enableInheritAlpha = shouldEnableInheritAlphaForDrop(parent, aboveThis);
+    }
+    juggler->moveNode(nodes, parent, aboveThis, enableInheritAlpha);
 }
 
 void KisNodeManager::copyNodesDirect(KisNodeList nodes, KisNodeSP parent, KisNodeSP aboveThis)
 {
     KUndo2MagicString actionName = kundo2_i18n("Copy Nodes");
     KisNodeJugglerCompressed *juggler = m_d->lazyGetJuggler(actionName);
-    juggler->copyNode(nodes, parent, aboveThis);
+    bool enableInheritAlpha = false;
+    KisConfig cfg(true);
+    if (cfg.clippingMaskViewEnabled() && parent && isClippingMaskGroup(parent)) {
+        KisNodeSP topChild = parent->lastChild();
+        if (topChild && aboveThis == topChild && parent->parent()) {
+            aboveThis = parent;
+            parent = parent->parent();
+        }
+        enableInheritAlpha = shouldEnableInheritAlphaForDrop(parent, aboveThis);
+    }
+    juggler->copyNode(nodes, parent, aboveThis, enableInheritAlpha);
 }
 
 void KisNodeManager::addNodesDirect(KisNodeList nodes, KisNodeSP parent, KisNodeSP aboveThis)
 {
     KUndo2MagicString actionName = kundo2_i18n("Add Nodes");
     KisNodeJugglerCompressed *juggler = m_d->lazyGetJuggler(actionName);
-    juggler->addNode(nodes, parent, aboveThis);
+    bool enableInheritAlpha = false;
+    KisConfig cfg(true);
+    if (cfg.clippingMaskViewEnabled() && parent && isClippingMaskGroup(parent)) {
+        KisNodeSP topChild = parent->lastChild();
+        if (topChild && aboveThis == topChild && parent->parent()) {
+            aboveThis = parent;
+            parent = parent->parent();
+        }
+        enableInheritAlpha = shouldEnableInheritAlphaForDrop(parent, aboveThis);
+    }
+    juggler->addNode(nodes, parent, aboveThis, enableInheritAlpha);
 }
 
 void KisNodeManager::toggleIsolateActiveNode()

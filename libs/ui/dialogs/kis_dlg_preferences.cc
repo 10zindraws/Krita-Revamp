@@ -2039,6 +2039,7 @@ DisplaySettingsTab::DisplaySettingsTab(QWidget *parent, const char *name)
     chkSelectionOutlineAntialiasing->setChecked(cfg.antialiasSelectionOutline());
     chkChannelsAsColor->setChecked(cfg.showSingleChannelAsColor());
     chkHidePopups->setChecked(cfg.hidePopups());
+    chkClippingMaskView->setChecked(cfg.clippingMaskViewEnabled());
 
     connect(grpOpenGL, SIGNAL(toggled(bool)), SLOT(slotUseOpenGLToggled(bool)));
 
@@ -2098,6 +2099,7 @@ void DisplaySettingsTab::setDefault()
     chkSelectionOutlineAntialiasing->setChecked(cfg.antialiasSelectionOutline(true));
     chkChannelsAsColor->setChecked(cfg.showSingleChannelAsColor(true));
     chkHidePopups->setChecked(cfg.hidePopups(true));
+    chkClippingMaskView->setChecked(cfg.clippingMaskViewEnabled(true));
 
     KoColor gridColor(KoColorSpaceRegistry::instance()->rgb8());
     gridColor.fromQColor(cfg.getPixelGridColor(true));
@@ -2629,6 +2631,7 @@ bool KisDlgPreferences::editPreferences()
         cfg.setAntialiasSelectionOutline(m_displaySettings->chkSelectionOutlineAntialiasing->isChecked());
         cfg.setShowSingleChannelAsColor(m_displaySettings->chkChannelsAsColor->isChecked());
         cfg.setHidePopups(m_displaySettings->chkHidePopups->isChecked());
+        cfg.setClippingMaskViewEnabled(m_displaySettings->chkClippingMaskView->isChecked());
 
         cfg.setHideDockersFullscreen(m_fullscreenSettings->chkDockers->checkState());
         cfg.setHideMenuFullscreen(m_fullscreenSettings->chkMenu->checkState());

@@ -8,12 +8,14 @@
 #include "NodeDelegate.h"
 #include "NodeViewVisibilityDelegate.h"
 #include "kis_node_model.h"
+#include "kis_node_filter_proxy_model.h"
 #include "kis_signals_blocker.h"
 
 
 #include <kconfig.h>
 #include <kconfiggroup.h>
 #include <kis_config.h>
+#include <kis_config_notifier.h>
 #include <kis_icon.h>
 #include <ksharedconfig.h>
 #include <KisKineticScroller.h>
@@ -30,8 +32,12 @@
 #include <QPainter>
 #include <QScrollBar>
 #include <QScroller>
+#include <QSignalBlocker>
 
 #include "kis_node_view_color_scheme.h"
+#include "kis_layer_properties_icons.h"
+#include <kis_node.h>
+#include <kis_base_node.h>
 
 
 #ifdef HAVE_X11
@@ -45,6 +51,89 @@
 #define DRAG_WHILE_DRAG_WORKAROUND_START()
 #define DRAG_WHILE_DRAG_WORKAROUND_STOP()
 #endif
+
+namespace {
+KisNodeSP nodeForIndex(const QModelIndex &index)
+{
+    if (!index.isValid()) {
+        return KisNodeSP();
+    }
+
+    const QModelIndex columnIndex = index.sibling(index.row(), 0);
+
+    if (auto proxy = qobject_cast<const KisNodeFilterProxyModel *>(columnIndex.model())) {
+        return proxy->nodeFromIndex(columnIndex);
+    }
+    if (auto model = qobject_cast<const KisNodeModel *>(columnIndex.model())) {
+        return model->nodeFromIndex(columnIndex);
+    }
+
+    return KisNodeSP();
+}
+
+bool isGroupLayerIndex(const QModelIndex &index)
+{
+    KisNodeSP node = nodeForIndex(index);
+    return node && node->inherits("KisGroupLayer");
+}
+
+bool hasInheritAlpha(const QModelIndex &index)
+{
+    if (!index.isValid()) {
+        return false;
+    }
+
+    const KisBaseNode::PropertyList props =
+        index.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
+
+    for (const auto &prop : props) {
+        if (prop.id == KisLayerPropertiesIcons::inheritAlpha.id()) {
+            return prop.state.toBool();
+        }
+    }
+
+    return false;
+}
+
+bool isClippingMaskGroupIndex(const QModelIndex &index)
+{
+    if (!index.isValid() || !isGroupLayerIndex(index)) {
+        return false;
+    }
+
+    KisConfig cfg(true);
+    if (!cfg.clippingMaskViewEnabled()) {
+        return false;
+    }
+
+    const QModelIndex topChild = index.model()->index(0, 0, index);
+    if (!topChild.isValid()) {
+        return false;
+    }
+
+    return hasInheritAlpha(topChild);
+}
+
+bool isClippingMaskTopAlphaChild(const QModelIndex &index)
+{
+    if (!index.isValid()) {
+        return false;
+    }
+
+    KisConfig cfg(true);
+    if (!cfg.clippingMaskViewEnabled()) {
+        return false;
+    }
+
+    if (!hasInheritAlpha(index)) {
+        return false;
+    }
+
+    const QModelIndex parent = index.parent();
+    return parent.isValid() && index.row() == 0 && isClippingMaskGroupIndex(parent);
+}
+
+} // namespace
 
 
 class Q_DECL_HIDDEN NodeView::Private
@@ -60,6 +149,7 @@ public:
     NodeDelegate delegate;
     QPersistentModelIndex hovered;
     QPoint lastPos;
+    bool isSyncingSelection {false};
 
 #ifdef DRAG_WHILE_DRAG_WORKAROUND
     bool isDragging;
@@ -94,6 +184,9 @@ NodeView::NodeView(QWidget *parent)
                     this, SLOT(slotScrollerStateChanged(QScroller::State)));
         }
     }
+
+    connect(KisConfigNotifier::instance(), SIGNAL(configChanged()),
+            this, SLOT(slotConfigurationChanged()));
 }
 
 NodeView::~NodeView()
@@ -124,6 +217,7 @@ void NodeView::setModel(QAbstractItemModel *model)
 
     // the default may be too large for our visibility icon
     header()->setMinimumSectionSize(KisNodeViewColorScheme::instance()->visibilityColumnWidth());
+    d->delegate.sizeHintChanged(QModelIndex());
 }
 
 void NodeView::addPropertyActions(QMenu *menu, const QModelIndex &index)
@@ -316,6 +410,23 @@ void NodeView::dataChanged(const QModelIndex &topLeft, const QModelIndex &bottom
 {
     QTreeView::dataChanged(topLeft, bottomRight);
 
+    const KisConfig cfg(true);
+    if (cfg.clippingMaskViewEnabled()) {
+        scheduleDelayedItemsLayout();
+        const int startRow = topLeft.row();
+        const int endRow = bottomRight.row();
+        for (int row = startRow; row <= endRow; ++row) {
+            const QModelIndex index = topLeft.sibling(row, 0);
+            if (!index.isValid()) {
+                continue;
+            }
+            const QModelIndex parent = index.parent();
+            if (parent.isValid() && index.row() == 0 && isGroupLayerIndex(parent)) {
+                d->delegate.sizeHintChanged(parent);
+            }
+        }
+    }
+
     for (int x = topLeft.row(); x <= bottomRight.row(); ++x) {
         for (int y = topLeft.column(); y <= bottomRight.column(); ++y) {
             QModelIndex index = topLeft.sibling(x, y);
@@ -333,6 +444,28 @@ void NodeView::dataChanged(const QModelIndex &topLeft, const QModelIndex &bottom
 void NodeView::selectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
 {
     QTreeView::selectionChanged(selected, deselected);
+    if (!d->isSyncingSelection) {
+        KisConfig cfg(true);
+        if (cfg.clippingMaskViewEnabled()) {
+            QItemSelectionModel *selection = selectionModel();
+            if (selection) {
+                QSignalBlocker blocker(selection);
+                d->isSyncingSelection = true;
+                const QModelIndexList selectedRows = selection->selectedRows();
+                for (const QModelIndex &index : selectedRows) {
+                    if (isClippingMaskTopAlphaChild(index)) {
+                        const QModelIndex groupIndex = index.parent();
+                        if (groupIndex.isValid() &&
+                            !selection->isRowSelected(groupIndex.row(), groupIndex.parent())) {
+                            selection->select(groupIndex,
+                                              QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                        }
+                    }
+                }
+                d->isSyncingSelection = false;
+            }
+        }
+    }
     // XXX: selectedIndexes() does not include hidden (collapsed) items, is this really intended?
     Q_EMIT selectionChanged(selectedIndexes());
 }
@@ -457,21 +590,39 @@ void NodeView::dropEvent(QDropEvent *ev)
 
 int NodeView::cursorPageIndex() const
 {
-    QSize size(visualRect(model()->index(0, 0, QModelIndex())).width(), visualRect(model()->index(0, 0, QModelIndex())).height());
+    int rowHeight = 0;
+    if (model()) {
+        const int rowCount = model()->rowCount(QModelIndex());
+        for (int row = 0; row < rowCount; ++row) {
+            const int height = visualRect(model()->index(row, 0, QModelIndex())).height();
+            if (height > 0) {
+                rowHeight = height;
+                break;
+            }
+        }
+    }
+    if (rowHeight <= 0) {
+        rowHeight = KisNodeViewColorScheme::instance()->rowHeight();
+    }
+    if (rowHeight <= 0) {
+        return 0;
+    }
+
     int scrollBarValue = verticalScrollBar()->value();
 
     QPoint cursorPosition = QWidget::mapFromGlobal(QCursor::pos());
 
-    int numberRow = (cursorPosition.y() + scrollBarValue) / size.height();
+    int numberRow = (cursorPosition.y() + scrollBarValue) / rowHeight;
 
     //If cursor is at the half button of the page then the move action is performed after the slide, otherwise it is
     //performed before the page
-    if (abs((cursorPosition.y() + scrollBarValue) - size.height()*numberRow) > (size.height()/2)) {
+    if (abs((cursorPosition.y() + scrollBarValue) - rowHeight*numberRow) > (rowHeight/2)) {
         numberRow++;
     }
 
-    if (numberRow > model()->rowCount(QModelIndex())) {
-        numberRow = model()->rowCount(QModelIndex());
+    const int maxRows = model() ? model()->rowCount(QModelIndex()) : 0;
+    if (numberRow > maxRows) {
+        numberRow = maxRows;
     }
 
     return numberRow;
@@ -524,6 +675,9 @@ void NodeView::slotConfigurationChanged()
     setIndentation(KisNodeViewColorScheme::instance()->indentation());
     updateSelectedCheckboxColumn();
     d->delegate.slotConfigChanged();
+    d->delegate.sizeHintChanged(QModelIndex());
+    scheduleDelayedItemsLayout();
+    viewport()->update();
 }
 
 void NodeView::updateSelectedCheckboxColumn()

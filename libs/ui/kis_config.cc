@@ -1937,6 +1937,16 @@ void KisConfig::setHidePopups(bool hidePopups)
     m_cfg.writeEntry("hidePopups", hidePopups);
 }
 
+bool KisConfig::clippingMaskViewEnabled(bool defaultValue) const
+{
+    return (defaultValue ? false : m_cfg.readEntry("enableClippingMaskView", false));
+}
+
+void KisConfig::setClippingMaskViewEnabled(bool enabled)
+{
+    m_cfg.writeEntry("enableClippingMaskView", enabled);
+}
+
 int KisConfig::numDefaultLayers(bool defaultValue) const
 {
     return (defaultValue ? 2 : m_cfg.readEntry("NumberOfLayersForNewImage", 2));

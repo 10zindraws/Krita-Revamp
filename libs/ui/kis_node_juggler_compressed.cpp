@@ -22,6 +22,8 @@
 #include "kis_layer.h"
 #include "kis_generator_layer.h"
 #include "kis_selection_mask.h"
+#include "kis_layer_properties_icons.h"
+#include "commands/kis_node_property_list_command.h"
 
 
 /**
@@ -478,14 +480,16 @@ struct DuplicateLayers : public KisCommandUtils::AggregateCommand {
                     KisNodeSP dstParent,
                     KisNodeSP dstAbove,
                     KisNodeSP activeNode,
-                    Mode mode)
+                    Mode mode,
+                    bool enableInheritAlpha)
         : m_updateData(updateData),
           m_image(image),
           m_nodes(nodes),
           m_dstParent(dstParent),
           m_dstAbove(dstAbove),
           m_activeNode(activeNode),
-          m_mode(mode) {}
+          m_mode(mode),
+          m_enableInheritAlpha(enableInheritAlpha) {}
 
     void populateChildCommands() override {
         KisNodeList filteredNodes = KisLayerUtils::sortAndFilterAnyMergeableNodesSafe(m_nodes, m_image);
@@ -602,6 +606,26 @@ struct DuplicateLayers : public KisCommandUtils::AggregateCommand {
 
         KisNodeSP newActiveNode = newNodes[qBound(0, indexOfActiveNode, newNodes.size() - 1)];
 
+        if (m_enableInheritAlpha) {
+            Q_FOREACH (KisNodeSP node, newNodes) {
+                if (!node || !node->inherits("KisLayer")) {
+                    continue;
+                }
+
+                const bool hasInherit = KisLayerPropertiesIcons::nodeProperty(
+                        node, KisLayerPropertiesIcons::inheritAlpha, false).toBool();
+                if (hasInherit) {
+                    continue;
+                }
+
+                KisBaseNode::PropertyList props = node->sectionModelProperties();
+                KisLayerPropertiesIcons::setNodeProperty(&props,
+                                                         KisLayerPropertiesIcons::inheritAlpha,
+                                                         true);
+                addCommand(new KisNodePropertyListCommand(node, props));
+            }
+        }
+
         addCommand(new KisLayerUtils::KeepNodesSelectedCommand(KisNodeList(), newNodes,
                                                                KisNodeSP(), newActiveNode,
                                                                m_image, true));
@@ -631,6 +655,7 @@ private:
     KisNodeSP m_dstAbove;
     KisNodeSP m_activeNode;
     Mode m_mode;
+    bool m_enableInheritAlpha;
 };
 
 struct RemoveLayers : private KisLayerUtils::RemoveNodeHelper, public KisCommandUtils::AggregateCommand {
@@ -785,11 +810,13 @@ void KisNodeJugglerCompressed::duplicateNode(const KisNodeList &nodes)
                             nodes,
                             KisNodeSP(), KisNodeSP(),
                             activeNode,
-                            DuplicateLayers::COPY),
+                            DuplicateLayers::COPY,
+                            false),
                 KisStrokeJobData::SEQUENTIAL, KisStrokeJobData::EXCLUSIVE);
 }
 
-void KisNodeJugglerCompressed::copyNode(const KisNodeList &nodes, KisNodeSP dstParent, KisNodeSP dstAbove)
+void KisNodeJugglerCompressed::copyNode(const KisNodeList &nodes, KisNodeSP dstParent, KisNodeSP dstAbove,
+                                        bool enableInheritAlpha)
 {
     KisNodeSP activeNode = m_d->nodeManager ? m_d->nodeManager->activeNode() : 0;
 
@@ -799,11 +826,13 @@ void KisNodeJugglerCompressed::copyNode(const KisNodeList &nodes, KisNodeSP dstP
                             nodes,
                             dstParent, dstAbove,
                             activeNode,
-                            DuplicateLayers::COPY),
+                            DuplicateLayers::COPY,
+                            enableInheritAlpha),
                 KisStrokeJobData::SEQUENTIAL, KisStrokeJobData::EXCLUSIVE);
 }
 
-void KisNodeJugglerCompressed::moveNode(const KisNodeList &nodes, KisNodeSP dstParent, KisNodeSP dstAbove)
+void KisNodeJugglerCompressed::moveNode(const KisNodeList &nodes, KisNodeSP dstParent, KisNodeSP dstAbove,
+                                        bool enableInheritAlpha)
 {
     KisNodeSP activeNode = m_d->nodeManager ? m_d->nodeManager->activeNode() : 0;
 
@@ -813,11 +842,13 @@ void KisNodeJugglerCompressed::moveNode(const KisNodeList &nodes, KisNodeSP dstP
                             nodes,
                             dstParent, dstAbove,
                             activeNode,
-                            DuplicateLayers::MOVE),
+                            DuplicateLayers::MOVE,
+                            enableInheritAlpha),
                 KisStrokeJobData::SEQUENTIAL, KisStrokeJobData::EXCLUSIVE);
 }
 
-void KisNodeJugglerCompressed::addNode(const KisNodeList &nodes, KisNodeSP dstParent, KisNodeSP dstAbove)
+void KisNodeJugglerCompressed::addNode(const KisNodeList &nodes, KisNodeSP dstParent, KisNodeSP dstAbove,
+                                       bool enableInheritAlpha)
 {
     KisNodeSP activeNode = m_d->nodeManager ? m_d->nodeManager->activeNode() : 0;
 
@@ -827,7 +858,8 @@ void KisNodeJugglerCompressed::addNode(const KisNodeList &nodes, KisNodeSP dstPa
                             nodes,
                             dstParent, dstAbove,
                             activeNode,
-                            DuplicateLayers::ADD),
+                            DuplicateLayers::ADD,
+                            enableInheritAlpha),
                 KisStrokeJobData::SEQUENTIAL, KisStrokeJobData::EXCLUSIVE);
 }
 

@@ -78,6 +78,52 @@
 #include "kis_statusbar.h"
 #include "KisViewManager.h"
 #include "kis_zoom_manager.h"
+
+namespace {
+bool hasInheritAlpha(KisNodeSP node)
+{
+    KisLayer *layer = qobject_cast<KisLayer*>(node.data());
+    return layer && layer->alphaChannelDisabled();
+}
+
+bool isClippingMaskGroup(KisNodeSP group)
+{
+    if (!group || !group->inherits("KisGroupLayer")) {
+        return false;
+    }
+
+    KisNodeSP topChild = group->lastChild();
+    return topChild && hasInheritAlpha(topChild);
+}
+
+bool isTopClippingMaskLayer(KisNodeSP node)
+{
+    if (!node || !hasInheritAlpha(node)) {
+        return false;
+    }
+
+    KisNodeSP parent = node->parent();
+    return parent && isClippingMaskGroup(parent) && node == parent->lastChild();
+}
+
+bool shouldEnableInheritAlphaForNewLayer(KisNodeSP activeNode, KisNodeSP parent, KisNodeSP above)
+{
+    if (!activeNode || !parent || !above) {
+        return false;
+    }
+
+    KisNodeSP group = activeNode->parent();
+    if (!group || !isClippingMaskGroup(group) || !hasInheritAlpha(activeNode)) {
+        return false;
+    }
+
+    if (activeNode == group->lastChild()) {
+        return false;
+    }
+
+    return parent == group && above == activeNode;
+}
+} // namespace
 #include "canvas/kis_canvas2.h"
 #include "widgets/kis_meta_data_merge_strategy_chooser_widget.h"
 #include "widgets/kis_wdg_generator.h"
@@ -579,6 +625,33 @@ void KisLayerManager::adjustLayerPosition(KisNodeSP node, KisNodeSP activeNode, 
 {
     Q_ASSERT(activeNode);
 
+    {
+        KisConfig cfg(true);
+        if (cfg.clippingMaskViewEnabled() && isTopClippingMaskLayer(activeNode)) {
+            KisNodeSP group = activeNode->parent();
+            if (group && group->parent()) {
+                parent = group->parent();
+                above = group;
+
+                while (parent &&
+                       (!parent->allowAsChild(node) || !parent->isEditable(false))) {
+
+                    above = parent;
+                    parent = parent->parent();
+                }
+
+                if (!parent) {
+                    warnKrita << "KisLayerManager::adjustLayerPosition:"
+                              << "No node accepted newly created node";
+
+                    parent = m_view->image()->root();
+                    above = parent->lastChild();
+                }
+                return;
+            }
+        }
+    }
+
     parent = activeNode;
     above = parent->lastChild();
 
@@ -609,6 +682,14 @@ void KisLayerManager::addLayerCommon(KisNodeSP activeNode, KisNodeSP layer, bool
     KisNodeSP parent;
     KisNodeSP above;
     adjustLayerPosition(layer, activeNode, parent, above);
+
+    KisConfig cfg(true);
+    if (cfg.clippingMaskViewEnabled() &&
+        shouldEnableInheritAlphaForNewLayer(activeNode, parent, above)) {
+        if (KisLayer *layerPtr = qobject_cast<KisLayer*>(layer.data())) {
+            layerPtr->disableAlphaChannel(true);
+        }
+    }
 
     KisGroupLayer *group = dynamic_cast<KisGroupLayer*>(parent.data());
     const bool parentForceUpdate = group && !group->projectionIsValid();
