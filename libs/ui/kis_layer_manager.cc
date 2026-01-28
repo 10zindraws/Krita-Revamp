@@ -679,13 +679,21 @@ void KisLayerManager::adjustLayerPosition(KisNodeSP node, KisNodeSP activeNode, 
 
 void KisLayerManager::addLayerCommon(KisNodeSP activeNode, KisNodeSP layer, bool updateImage, KisProcessingApplicator *applicator)
 {
+    KisNodeSP effectiveActiveNode = activeNode;
+    KisConfig cfg(true);
+    if (cfg.clippingMaskViewEnabled() && activeNode && isClippingMaskGroup(activeNode)) {
+        KisNodeSP topChild = activeNode->lastChild();
+        if (topChild) {
+            effectiveActiveNode = topChild;
+        }
+    }
+
     KisNodeSP parent;
     KisNodeSP above;
-    adjustLayerPosition(layer, activeNode, parent, above);
+    adjustLayerPosition(layer, effectiveActiveNode, parent, above);
 
-    KisConfig cfg(true);
     if (cfg.clippingMaskViewEnabled() &&
-        shouldEnableInheritAlphaForNewLayer(activeNode, parent, above)) {
+        shouldEnableInheritAlphaForNewLayer(effectiveActiveNode, parent, above)) {
         if (KisLayer *layerPtr = qobject_cast<KisLayer*>(layer.data())) {
             layerPtr->disableAlphaChannel(true);
         }
