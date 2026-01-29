@@ -2023,9 +2023,10 @@ void KisMainWindow::slotStoragesWarning(const QString &/*location*/)
         }
     }
 
-    if (!checkActiveBundlesAvailable()) {
-        QMessageBox::warning(this, i18nc("@title:window", "Krita"), warning + i18n("\nOnly your local resources are available."));
-    }
+    // Disabled: Don't show warning dialog for missing resource bundles
+    // if (!checkActiveBundlesAvailable()) {
+    //     QMessageBox::warning(this, i18nc("@title:window", "Krita"), warning + i18n("\nOnly your local resources are available."));
+    // }
 
 }
 
