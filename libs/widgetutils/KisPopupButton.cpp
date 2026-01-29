@@ -140,6 +140,7 @@ void KisPopupButton::setPopupWidget(QWidget* widget)
         delete m_d->frame;
         m_d->frame = new KisPopupButtonFrame(this->window(), m_d->isPopupDetached);
         m_d->frame->setWindowTitle(widget->windowTitle());
+        m_d->frame->installEventFilter(this);
 
         m_d->popupWidget = widget;
 
@@ -186,6 +187,18 @@ void KisPopupButton::setPopupWidgetVisible(bool visible)
 bool KisPopupButton::isPopupWidgetVisible()
 {
     return m_d->popupWidget && m_d->frame->isVisible();
+}
+
+bool KisPopupButton::eventFilter(QObject *watched, QEvent *event)
+{
+    // Catch when the frame is hidden (e.g., by clicking outside a Qt::Popup)
+    // and emit the visibility changed signal
+    if (watched == m_d->frame && event->type() == QEvent::Hide) {
+        Q_EMIT sigPopupWidgetVisibilityChanged(false);
+    } else if (watched == m_d->frame && event->type() == QEvent::Show) {
+        Q_EMIT sigPopupWidgetVisibilityChanged(true);
+    }
+    return QToolButton::eventFilter(watched, event);
 }
 
 void KisPopupButton::paintEvent ( QPaintEvent * event  )

@@ -52,6 +52,14 @@ public:
 
     bool isPopupWidgetVisible();
 
+Q_SIGNALS:
+    /**
+     * Emitted when the popup widget visibility changes.
+     * This is useful for synchronizing external state (like action checked state)
+     * with the popup's actual visibility.
+     */
+    void sigPopupWidgetVisibilityChanged(bool visible);
+
 public Q_SLOTS:
 
     void showPopupWidget();
@@ -68,6 +76,7 @@ public Q_SLOTS:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
     void paintPopupArrow();
 private:

@@ -381,7 +381,12 @@ void KisResourceItemListView::mouseDoubleClickEvent(QMouseEvent *event)
     if (index.isValid()) {
         Q_EMIT currentResourceDoubleClicked(index);
     }
-    QListView::mouseDoubleClickEvent(event);
+    // Don't call QListView::mouseDoubleClickEvent(event) because:
+    // 1. We already emit our custom currentResourceDoubleClicked signal
+    // 2. The parent's implementation emits additional signals and can trigger
+    //    edit mode, which interferes with popups opened by the double-click
+    //    handler (e.g., the Brush Editor popup rapidly opening/closing)
+    event->accept();
 }
 
 void KisResourceItemListView::startReorderDrag()

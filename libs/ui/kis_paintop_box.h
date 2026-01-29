@@ -172,7 +172,7 @@ private Q_SLOTS:
 
     void slotUpdateOptionsWidgetPopup();
 
-    void togglePresetEditor();
+    void togglePresetEditor(bool showEditor);
 
 private:
     KisCanvasResourceProvider*          m_resourceProvider {0};

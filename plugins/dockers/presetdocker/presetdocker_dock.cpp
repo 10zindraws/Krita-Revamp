@@ -81,7 +81,9 @@ void PresetDockerDock::slotResourceDoubleClicked(KoResourceSP resource)
     if (m_canvas && m_canvas->viewManager()) {
         QAction* action = m_canvas->viewManager()->actionCollection()->action("show_brush_editor");
         if (action) {
-            action->trigger();
+            // Use setChecked(true) instead of trigger() to always OPEN the brush editor
+            // trigger() would toggle the editor, but double-clicking should always open it
+            action->setChecked(true);
         }
     }
 }

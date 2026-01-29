@@ -484,7 +484,10 @@ KisPaintopBox::KisPaintopBox(KisViewManager *viewManager, QWidget *parent, const
     action = new QWidgetAction(this);
     KisActionRegistry::instance()->propertizeAction("show_brush_editor", action);
     viewManager->actionCollection()->addAction("show_brush_editor", action);
-    connect(action, SIGNAL(toggled(bool)), this, SLOT(togglePresetEditor()));
+    connect(action, SIGNAL(toggled(bool)), this, SLOT(togglePresetEditor(bool)));
+    // Synchronize action checked state with popup visibility (e.g., when popup is closed
+    // by clicking outside with Qt::Popup flag, the action needs to be unchecked)
+    connect(m_brushEditorPopupButton, SIGNAL(sigPopupWidgetVisibilityChanged(bool)), action, SLOT(setChecked(bool)));
     m_presetsEditor->addAction(action);
 
     m_currCompositeOpID = KoCompositeOpRegistry::instance().getDefaultCompositeOp().id();
@@ -778,12 +781,19 @@ void KisPaintopBox::slotUpdateOptionsWidgetPopup()
     m_optionWidget->setImage(m_viewManager->image());
 }
 
-void KisPaintopBox::togglePresetEditor()
+void KisPaintopBox::togglePresetEditor(bool showEditor)
 {
-    if (m_brushEditorPopupButton->isPopupWidgetVisible()) {
-        m_brushEditorPopupButton->hidePopupWidget();
+    // Use the action's checked state to SET the visibility, not toggle it.
+    // This prevents desync between action state and popup visibility
+    // (e.g., when popup is closed by clicking outside with Qt::Popup flag)
+    if (showEditor) {
+        if (!m_brushEditorPopupButton->isPopupWidgetVisible()) {
+            m_brushEditorPopupButton->showPopupWidget();
+        }
     } else {
-        m_brushEditorPopupButton->showPopupWidget();
+        if (m_brushEditorPopupButton->isPopupWidgetVisible()) {
+            m_brushEditorPopupButton->hidePopupWidget();
+        }
     }
 }
 
