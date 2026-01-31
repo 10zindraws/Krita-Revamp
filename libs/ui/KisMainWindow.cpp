@@ -1609,6 +1609,17 @@ void KisMainWindow::showEvent(QShowEvent *event)
     if (!event->spontaneous()) {
         setMainWindowLayoutForCurrentMainWidget(d->widgetStack->currentIndex(), false);
     }
+
+    // Reapply fonts after first show to ensure correct DPI values
+    // This fixes HiDPI custom font sizing issue at startup
+    if (!m_fontsAppliedAfterShow) {
+        m_fontsAppliedAfterShow = true;
+        // Use QTimer::singleShot to ensure this runs after event processing
+        QTimer::singleShot(0, this, [this]() {
+            applyCustomFonts();
+        });
+    }
+
 #ifdef Q_OS_ANDROID
     Q_EMIT sigFullscreenOnShow(true); // Android defaults to fullscreen.
 #endif
@@ -2459,6 +2470,25 @@ void KisMainWindow::forceDockTabFonts()
     }
 }
 
+void KisMainWindow::applyCustomFonts()
+{
+    qApp->setFont(KisUiFont::normalFont());
+
+    Q_FOREACH (QObject* widget, children()) {
+        if (widget->inherits("QDockWidget")) {
+            QDockWidget* dw = static_cast<QDockWidget*>(widget);
+            dw->setFont(KisUiFont::dockFont());
+        }
+    }
+
+    // Also update tab bar fonts
+    Q_FOREACH (QObject *child, children()) {
+        if (child->inherits("QTabBar")) {
+            ((QTabBar *)child)->setFont(KisUiFont::dockFont());
+        }
+    }
+}
+
 void KisMainWindow::slotUpdateWidgetStyle()
 {
      KisConfig cfg(true);
@@ -2833,14 +2863,7 @@ void KisMainWindow::configChanged()
 
     d->mdiArea->update();
 
-    qApp->setFont(KisUiFont::normalFont());
-
-    Q_FOREACH (QObject* widget, children()) {
-        if (widget->inherits("QDockWidget")) {
-            QDockWidget* dw = static_cast<QDockWidget*>(widget);
-            dw->setFont(KisUiFont::dockFont());
-        }
-    }
+    applyCustomFonts();
 }
 
 KisView* KisMainWindow::newView(QObject *document, QMdiSubWindow *subWindow)

@@ -476,6 +476,8 @@ private:
     void setMainWindowLayoutForCurrentMainWidget(int widgetIndex, bool widgetIndexChanged);
     void adjustLayoutForWelcomePage();
 
+    void applyCustomFonts();
+
 private:
 
     /**
@@ -495,6 +497,7 @@ private:
 
     QString m_errorMessage;
     bool m_dieOnError;
+    bool m_fontsAppliedAfterShow = false;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(KisMainWindow::OpenFlags)
