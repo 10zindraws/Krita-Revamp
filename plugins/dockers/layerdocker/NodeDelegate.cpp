@@ -123,6 +123,10 @@ public:
 
     QList<QModelIndex> shiftClickedIndexes;
 
+    // Alt+click isolate mode state
+    bool altIsolateActive {false};
+    QPersistentModelIndex altIsolateCurrentVisibleIndex;
+
     enum StasisOperation {
         Record,
         Review,
@@ -133,6 +137,12 @@ public:
     int numProperties(const QModelIndex &index) const;
     OptionalProperty findProperty(KisBaseNode::PropertyList &props, const OptionalProperty &refProp) const;
     OptionalProperty findVisibilityProperty(KisBaseNode::PropertyList &props) const;
+    bool isLayerLocked(const QModelIndex &index) const;
+
+    // Alt+click isolate mode methods
+    void handleAltIsolateClick(const QModelIndex &clickedIndex);
+    void endAltIsolate();
+    void hideOthersRecursive(const QModelIndex &root, const QModelIndex &clickedIndex);
 
     void toggleProperty(KisBaseNode::PropertyList &props, const OptionalProperty clickedProperty, const Qt::KeyboardModifiers modifier, const QModelIndex &index);
     void togglePropertyRecursive(const QModelIndex &root, const OptionalProperty &clickedProperty, const QList<QModelIndex> &items, StasisOperation record, bool mode);
@@ -820,6 +830,104 @@ OptionalProperty NodeDelegate::Private::findVisibilityProperty(KisBaseNode::Prop
     return 0;
 }
 
+bool NodeDelegate::Private::isLayerLocked(const QModelIndex &index) const
+{
+    KisBaseNode::PropertyList props = index.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
+    for (const auto &prop : props) {
+        if (prop.id == KisLayerPropertiesIcons::locked.id()) {
+            return prop.state.toBool();
+        }
+    }
+    return false;
+}
+
+void NodeDelegate::Private::hideOthersRecursive(const QModelIndex &root, const QModelIndex &clickedIndex)
+{
+    int rowCount = view->model()->rowCount(root);
+    for (int i = 0; i < rowCount; i++) {
+        QModelIndex idx = view->model()->index(i, 0, root);
+
+        // Skip the clicked layer - it should stay visible
+        if (idx == clickedIndex) {
+            hideOthersRecursive(idx, clickedIndex);
+            continue;
+        }
+
+        // Skip locked layers - don't change their visibility
+        if (isLayerLocked(idx)) {
+            hideOthersRecursive(idx, clickedIndex);
+            continue;
+        }
+
+        // Hide this layer
+        KisBaseNode::PropertyList props = idx.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
+        OptionalProperty visibilityProp = findVisibilityProperty(props);
+        if (visibilityProp && visibilityProp->state.toBool()) {
+            visibilityProp->state = false;
+            view->model()->setData(idx, QVariant::fromValue(props), KisNodeModel::PropertiesRole);
+        }
+
+        hideOthersRecursive(idx, clickedIndex);
+    }
+}
+
+void NodeDelegate::Private::handleAltIsolateClick(const QModelIndex &clickedIndex)
+{
+    QModelIndex root = view->rootIndex();
+
+    if (altIsolateActive) {
+        // Subsequent click while Alt is held - switch to new layer
+        // Hide the previous visible layer (if it's not locked and not the same as clicked)
+        if (altIsolateCurrentVisibleIndex.isValid() &&
+            altIsolateCurrentVisibleIndex != clickedIndex &&
+            !isLayerLocked(altIsolateCurrentVisibleIndex)) {
+            KisBaseNode::PropertyList prevProps = altIsolateCurrentVisibleIndex.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
+            OptionalProperty prevVisibilityProp = findVisibilityProperty(prevProps);
+            if (prevVisibilityProp && prevVisibilityProp->state.toBool()) {
+                prevVisibilityProp->state = false;
+                view->model()->setData(altIsolateCurrentVisibleIndex, QVariant::fromValue(prevProps), KisNodeModel::PropertiesRole);
+            }
+        }
+
+        // Make the clicked layer visible
+        KisBaseNode::PropertyList props = clickedIndex.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
+        OptionalProperty visibilityProp = findVisibilityProperty(props);
+        if (visibilityProp && !visibilityProp->state.toBool()) {
+            visibilityProp->state = true;
+            view->model()->setData(clickedIndex, QVariant::fromValue(props), KisNodeModel::PropertiesRole);
+        }
+
+        // Update the current visible index
+        altIsolateCurrentVisibleIndex = QPersistentModelIndex(clickedIndex);
+    } else {
+        // First click - activate Alt isolate mode
+        altIsolateActive = true;
+        altIsolateCurrentVisibleIndex = QPersistentModelIndex(clickedIndex);
+
+        // Make sure the clicked layer is visible
+        KisBaseNode::PropertyList props = clickedIndex.data(KisNodeModel::PropertiesRole).value<KisBaseNode::PropertyList>();
+        OptionalProperty visibilityProp = findVisibilityProperty(props);
+        if (visibilityProp && !visibilityProp->state.toBool()) {
+            visibilityProp->state = true;
+            view->model()->setData(clickedIndex, QVariant::fromValue(props), KisNodeModel::PropertiesRole);
+        }
+
+        // Hide all other layers (except locked ones)
+        hideOthersRecursive(root, clickedIndex);
+    }
+}
+
+void NodeDelegate::Private::endAltIsolate()
+{
+    if (!altIsolateActive) {
+        return;
+    }
+
+    // Just clear the state - don't restore visibility (changes persist)
+    altIsolateActive = false;
+    altIsolateCurrentVisibleIndex = QPersistentModelIndex();
+}
+
 void NodeDelegate::Private::toggleProperty(KisBaseNode::PropertyList &props, const OptionalProperty clickedProperty, const Qt::KeyboardModifiers modifier, const QModelIndex &index)
 {
     QModelIndex root(view->rootIndex());
@@ -1408,8 +1516,8 @@ bool NodeDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const Q
                 if (!clickedProperty) {
                     if (altButton) {
                         d->view->setCurrentIndex(index);
-                        model->setData(index, true, KisNodeModel::AlternateActiveRole);
-
+                        // Handle Alt-isolate mode: hide all other layers except clicked and locked
+                        d->handleAltIsolateClick(index);
                         return true;
                     } else if (mouseEvent->modifiers() == Qt::ControlModifier) {
                         // the control modifier shifts the current index as well (even when deselected), so we
@@ -1507,6 +1615,15 @@ void NodeDelegate::toggleSolo(const QModelIndex &index) {
 bool NodeDelegate::eventFilter(QObject *object, QEvent *event)
 {
     switch (event->type()) {
+    case QEvent::KeyRelease: {
+        // End Alt-isolate mode when Alt key is released
+        if (d->altIsolateActive) {
+            QKeyEvent *ke = static_cast<QKeyEvent*>(event);
+            if (ke->key() == Qt::Key_Alt) {
+                d->endAltIsolate();
+            }
+        }
+    } break;
     case QEvent::MouseButtonPress: {
         if (d->edit) {
             QMouseEvent *me = static_cast<QMouseEvent*>(event);
