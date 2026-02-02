@@ -5,6 +5,7 @@
 */
 
 #include "KisDetailsPane.h"
+#include "KisTemplateItemDelegate.h"
 
 #include <QStandardItemModel>
 #include <QKeyEvent>
@@ -30,6 +31,7 @@ KisDetailsPane::KisDetailsPane(QWidget* parent, const QString& header)
     m_documentList->installEventFilter(this);
     m_documentList->setIconSize(QSize(IconExtent, IconExtent));
     m_documentList->setModel(&d->m_model);
+    m_documentList->setItemDelegate(new KisTemplateItemDelegate(m_documentList));
     m_splitter->setSizes(QList<int>() << 2 << 1);
 
     changePalette();

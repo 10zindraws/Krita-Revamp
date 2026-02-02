@@ -409,6 +409,7 @@ set(kritaui_LIB_SRCS
     KisApplication.cpp
     KisAutoSaveRecoveryDialog.cpp
     KisDetailsPane.cpp
+    KisTemplateItemDelegate.cpp
     KisDocument.cpp
     KisCloneDocumentStroke.cpp
     kis_node_view_color_scheme.cpp
