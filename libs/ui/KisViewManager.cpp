@@ -1310,6 +1310,11 @@ void KisViewManager::switchCanvasOnly(bool toggled)
         }
     }
 
+    // When entering canvas-only mode, hide tabs bar before showing the message
+    if (cfg.hideTabsbarFullscreen() && toggled) {
+        main->setTabsBarVisible(false);
+    }
+
     showHideScrollbars();
 
     if (toggled) {
@@ -1322,6 +1327,13 @@ void KisViewManager::switchCanvasOnly(bool toggled)
     }
     else {
         main->restoreState(d->canvasState);
+
+        // When exiting canvas-only mode, show tabs bar AFTER restoreState()
+        // to ensure the krita_ui_tweaks plugin receives the resize event
+        // after all layout changes from restoreState() are complete
+        if (cfg.hideTabsbarFullscreen()) {
+            main->setTabsBarVisible(true);
+        }
     }
 
 }

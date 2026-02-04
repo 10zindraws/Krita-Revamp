@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QCloseEvent>
+#include <QResizeEvent>
 #include <QStandardPaths>
 #include <QDesktopServices>
 #include <QDesktopWidget>
@@ -48,6 +49,7 @@
 #include <QWindow>
 #include <QTemporaryDir>
 #include <QScrollArea>
+#include <QTimer>
 #include <kactioncollection.h>
 #include <kactionmenu.h>
 #include <kis_debug.h>
@@ -2366,6 +2368,57 @@ void KisMainWindow::viewFullscreen(bool fullScreen)
         setWindowState(windowState() & ~Qt::WindowFullScreen);   // reset
     }
     d->fullScreenMode->setChecked(isFullScreen());
+}
+
+void KisMainWindow::setTabsBarVisible(bool visible)
+{
+    if (d->mdiArea->viewMode() != QMdiArea::TabbedView) {
+        return;
+    }
+
+    // Set a dynamic property on the MDI area to track canvas-only tabs hidden state
+    // This property is checked by the krita_ui_tweaks plugin to properly hide
+    // its custom tab bar and resize subwindows to fill the entire area
+    d->mdiArea->setProperty("tabsHiddenForCanvasOnly", !visible);
+
+    // Hide/show the native QTabBar (direct child of QMdiArea)
+    QTabBar *nativeTabBar = d->findTabBarHACK();
+    if (nativeTabBar) {
+        nativeTabBar->setVisible(visible);
+    }
+
+    // Force subwindows to resize, which triggers the krita_ui_tweaks plugin
+    // to recalculate layout and check the tabsHiddenForCanvasOnly property
+    Q_FOREACH (QMdiSubWindow *subWindow, d->mdiArea->subWindowList()) {
+        if (!visible) {
+            // Remove any fixed size constraints
+            subWindow->setMinimumSize(0, 0);
+            subWindow->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+            // Make subwindow fill entire area
+            QRect mdiRect = d->mdiArea->contentsRect();
+            subWindow->setGeometry(mdiRect);
+        }
+        // Trigger a resize event which the plugin will detect
+        QResizeEvent resizeEvent(subWindow->size(), subWindow->size());
+        QApplication::sendEvent(subWindow, &resizeEvent);
+    }
+
+    // The krita_ui_tweaks plugin's Split widget is parented to centralWidget(),
+    // and its event filter watches for resize events on that widget.
+    // We need to trigger a resize on the central widget (not MDI area) for the
+    // plugin to receive the event and update its custom toolbar visibility.
+    // Use QTimer::singleShot to defer to the next event loop iteration,
+    // ensuring all current event processing is complete before the resize.
+    QWidget *central = centralWidget();
+    if (central) {
+        QTimer::singleShot(0, central, [central]() {
+            if (central) {
+                QSize s = central->size();
+                central->resize(s.width() + 1, s.height());
+                central->resize(s);
+            }
+        });
+    }
 }
 
 QDockWidget* KisMainWindow::createDockWidget(KoDockFactoryBase* factory)

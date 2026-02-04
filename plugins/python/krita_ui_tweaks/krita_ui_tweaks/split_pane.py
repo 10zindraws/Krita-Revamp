@@ -2929,6 +2929,7 @@ class Split(QObject):
             second = parent._second
             handle = parent._handle
             if not handle:
+                self._resizing = False
                 return
             px, py, pw, ph = parent.getRect()
             hx, hy, hw, hh = handle.geometry().getRect()
@@ -2949,6 +2950,7 @@ class Split(QObject):
 
         if self._state == Split.STATE_SPLIT:
             if not self._handle:
+                self._resizing = False
                 return
             handleRect = self._handle.globalRect()
             if (
@@ -2966,13 +2968,22 @@ class Split(QObject):
             old_rect != self._rect or self.isForceResizing()
         ):
             if self._toolbar is not None:
-                self._toolbar.setFixedHeight(TAB_BAR_HEIGHT)
-                self._toolbar.setGeometry(
-                    self._rect.x(),
-                    self._rect.y(),
-                    self._rect.width(),
-                    TAB_BAR_HEIGHT,
-                )
+                # Check if tabs are hidden for canvas-only mode
+                mdi = self._helper.getMdi()
+                tabsHidden = mdi.property("tabsHiddenForCanvasOnly") if mdi else False
+                if tabsHidden:
+                    # In canvas-only mode, hide toolbar and let subwindow fill entire area
+                    self._toolbar.setFixedHeight(0)
+                    self._toolbar.setVisible(False)
+                else:
+                    self._toolbar.setFixedHeight(TAB_BAR_HEIGHT)
+                    self._toolbar.setVisible(True)
+                    self._toolbar.setGeometry(
+                        self._rect.x(),
+                        self._rect.y(),
+                        self._rect.width(),
+                        TAB_BAR_HEIGHT,
+                    )
                 self.resizeSubWindow()
             self.resized.emit()
         self._forceResizing = False
@@ -2988,13 +2999,17 @@ class Split(QObject):
         if win and toolbar:
             helper.disableToast()
             rect = self._rect
+            # Check if tabs are hidden for canvas-only mode
+            mdi = helper.getMdi()
+            tabsHidden = mdi.property("tabsHiddenForCanvasOnly") if mdi else False
+            toolbarHeight = 0 if tabsHidden else toolbar.height()
             win.setFixedWidth(rect.width())
-            win.setFixedHeight(rect.height() - toolbar.height())
+            win.setFixedHeight(rect.height() - toolbarHeight)
             win.setGeometry(
                 rect.x(),
-                rect.y() + toolbar.height(),
+                rect.y() + toolbarHeight,
                 rect.width(),
-                rect.height() - toolbar.height(),
+                rect.height() - toolbarHeight,
             )
             win.raise_()
             win.show()

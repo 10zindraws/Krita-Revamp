@@ -1671,6 +1671,16 @@ void KisConfig::setHideToolbarFullscreen(const bool value) const
     m_cfg.writeEntry("hideToolbarFullscreen", value);
 }
 
+bool KisConfig::hideTabsbarFullscreen(bool defaultValue) const
+{
+    return (defaultValue ? true : m_cfg.readEntry("hideTabsbarFullscreen", true));
+}
+
+void KisConfig::setHideTabsbarFullscreen(const bool value) const
+{
+    m_cfg.writeEntry("hideTabsbarFullscreen", value);
+}
+
 bool KisConfig::fullscreenMode(bool defaultValue) const
 {
     return (defaultValue ? true : m_cfg.readEntry("fullscreenMode", false));

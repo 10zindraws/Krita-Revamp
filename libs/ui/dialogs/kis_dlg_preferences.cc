@@ -2157,6 +2157,7 @@ FullscreenSettingsTab::FullscreenSettingsTab(QWidget* parent) : WdgFullscreenSet
     chkStatusbar->setChecked(cfg.hideStatusbarFullscreen());
     chkTitlebar->setChecked(cfg.hideTitlebarFullscreen());
     chkToolbar->setChecked(cfg.hideToolbarFullscreen());
+    chkTabsbar->setChecked(cfg.hideTabsbarFullscreen());
 
 }
 
@@ -2169,6 +2170,7 @@ void FullscreenSettingsTab::setDefault()
     chkStatusbar->setChecked(cfg.hideStatusbarFullscreen(true));
     chkTitlebar->setChecked(cfg.hideTitlebarFullscreen(true));
     chkToolbar->setChecked(cfg.hideToolbarFullscreen(true));
+    chkTabsbar->setChecked(cfg.hideTabsbarFullscreen(true));
 }
 
 
@@ -2639,6 +2641,7 @@ bool KisDlgPreferences::editPreferences()
         cfg.setHideStatusbarFullscreen(m_fullscreenSettings->chkStatusbar->checkState());
         cfg.setHideTitlebarFullscreen(m_fullscreenSettings->chkTitlebar->checkState());
         cfg.setHideToolbarFullscreen(m_fullscreenSettings->chkToolbar->checkState());
+        cfg.setHideTabsbarFullscreen(m_fullscreenSettings->chkTabsbar->checkState());
 
         cfg.setCursorMainColor(m_general->cursorColorButton->color().toQColor());
         cfg.setEraserCursorMainColor(m_general->eraserCursorColorButton->color().toQColor());

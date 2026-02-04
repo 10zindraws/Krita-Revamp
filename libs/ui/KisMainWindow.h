@@ -288,6 +288,11 @@ public Q_SLOTS:
     void viewFullscreen(bool fullScreen);
 
     /**
+     * Set the tabs bar visibility (only affects TabbedView mode).
+     */
+    void setTabsBarVisible(bool visible);
+
+    /**
      * @brief checkActiveStorages checks whether there is at least one bundle available and
      * at least one paintop preset.
      */
