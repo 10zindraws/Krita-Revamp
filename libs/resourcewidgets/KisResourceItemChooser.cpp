@@ -100,6 +100,7 @@ public:
     bool isResponsive = false;
     bool showViewModeBtn = true;
     bool showStoragePopupBtn = true;
+    bool showTagToolBtn = true;
 
     // Horizontal Layout Widgets
     QSplitter* horzSplitter {0};
@@ -665,6 +666,17 @@ void KisResourceItemChooser::showStorageBtn(bool visible)
     d->showStoragePopupBtn = visible;
 }
 
+void KisResourceItemChooser::showTagToolBtn(bool visible)
+{
+    d->tagToolButton->setVisible(visible);
+    d->showTagToolBtn = visible;
+}
+
+KisTagChooserWidget *KisResourceItemChooser::tagChooserWidget() const
+{
+    return d->tagManager->tagChooserWidget();
+}
+
 void KisResourceItemChooser::showViewModeBtn(bool visible)
 {
     d->viewModeButton->setVisible(visible);
@@ -790,8 +802,8 @@ void KisResourceItemChooser::applyVerticalLayout()
     // Hide storage button completely (not in new layout)
     d->storagePopupButton->setVisible(false);
 
-    // Show tag tool button and view mode button
-    d->tagToolButton->setVisible(true);
+    // Show tag tool button and view mode button based on settings
+    d->tagToolButton->setVisible(d->showTagToolBtn);
     d->viewModeButton->setVisible(d->showViewModeBtn);
 
     d->layout = Layout::Vertical;
@@ -844,7 +856,7 @@ void KisResourceItemChooser::changeLayoutBasedOnSize()
             thisLayout->setRowStretch(1, 0);
 
             d->viewModeButton->setVisible(d->showViewModeBtn);
-            d->tagToolButton->setVisible(true);
+            d->tagToolButton->setVisible(d->showTagToolBtn);
             d->storagePopupButton->setVisible(false);
 
             const bool splitterRestored = d->restoreSplitterState(Layout::Horizontal2Rows);
@@ -893,7 +905,7 @@ void KisResourceItemChooser::changeLayoutBasedOnSize()
             thisLayout->setRowStretch(1, 0);
 
             d->viewModeButton->setVisible(d->showViewModeBtn);
-            d->tagToolButton->setVisible(true);
+            d->tagToolButton->setVisible(d->showTagToolBtn);
             d->storagePopupButton->setVisible(false);
 
             const bool splitterRestored = d->restoreSplitterState(Layout::Horizontal1Row);

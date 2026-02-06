@@ -1,6 +1,7 @@
 /* This file is part of the KDE project
  * SPDX-FileCopyrightText: 2010 Sven Langkamp <sven.langkamp@gmail.com>
  * SPDX-FileCopyrightText: 2011 Srikanth Tiyyagura <srikanth.tulasiram@gmail.com>
+ * SPDX-FileCopyrightText: 2026 Tenzin Rangdol <tenzindraws@gmail.com>
  *
  * SPDX-License-Identifier: LGPL-2.0-or-later
  */
@@ -21,7 +22,7 @@ class KRITAUI_EXPORT KisPaintOpPresetsChooserPopup : public QWidget
 public:
     KisPaintOpPresetsChooserPopup(QWidget * parent = 0);
     ~KisPaintOpPresetsChooserPopup() override;
-    
+
     void updateViewSettings();
     void setResponsiveness(bool value);
 public Q_SLOTS:
@@ -32,14 +33,15 @@ Q_SIGNALS:
     void resourceSelected(KoResourceSP resource);
     void resourceClicked(KoResourceSP resource);
     void resourceDoubleClicked(KoResourceSP resource);
-    
+
 private Q_SLOTS:
     void slotThumbnailMode();
     void slotDetailMode();
     void slotStrokeMode();
     void slotUpdateMenu();
     void paintEvent(QPaintEvent *) override;
-   
+    void slotTagSelectorSizeHintChanged();
+
 private:
 
     struct Private;

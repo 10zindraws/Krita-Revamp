@@ -32,6 +32,7 @@ class QToolButton;
 class QSortFilterProxyModel;
 class KisResourceItemListView;
 class KisTagFilterResourceProxyModel;
+class KisTagChooserWidget;
 
 #include "kritaresourcewidgets_export.h"
 
@@ -82,6 +83,13 @@ public:
     /// Shows or hides the storage button.
     /// Default is true.
     void showStorageBtn(bool visible);
+
+    /// Shows or hides the tag tool button (the "Tag" button).
+    /// Default is true.
+    void showTagToolBtn(bool visible);
+
+    /// Returns the tag chooser widget for accessing the tag model and selection.
+    KisTagChooserWidget *tagChooserWidget() const;
 
     /// Sets the height of the view rows
     void setRowHeight(int rowHeight);

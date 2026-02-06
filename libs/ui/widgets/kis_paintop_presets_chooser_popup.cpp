@@ -12,6 +12,8 @@
 #include <QMenu>
 #include <QWidgetAction>
 #include <QSlider>
+#include <QVBoxLayout>
+#include <QComboBox>
 
 #include <KoResource.h>
 #include <KisResourceItemChooser.h>
@@ -23,6 +25,10 @@
 #include <kis_icon.h>
 #include <brushengine/kis_paintop_settings.h>
 #include "KisPopupButton.h"
+#include "KisBrushTagSelectorWidget.h"
+#include "KisTagChooserWidget.h"
+#include "KisResourceTaggingManager.h"
+#include <KisTagModel.h>
 
 struct KisPaintOpPresetsChooserPopup::Private
 {
@@ -31,6 +37,7 @@ public:
     bool firstShown {true};
     QSlider* iconSizeSlider {nullptr};
     KisPopupButton *viewModeButton {nullptr};
+    KisBrushTagSelectorWidget *tagSelectorWidget {nullptr};
 };
 
 KisPaintOpPresetsChooserPopup::KisPaintOpPresetsChooserPopup(QWidget * parent)
@@ -38,6 +45,14 @@ KisPaintOpPresetsChooserPopup::KisPaintOpPresetsChooserPopup(QWidget * parent)
     , m_d(new Private())
 {
     m_d->uiWdgPaintOpPresets.setupUi(this);
+
+    // Create and add the tag selector widget at the top
+    m_d->tagSelectorWidget = new KisBrushTagSelectorWidget(this);
+    QVBoxLayout *mainLayout = qobject_cast<QVBoxLayout *>(layout());
+    if (mainLayout) {
+        mainLayout->insertWidget(0, m_d->tagSelectorWidget);
+    }
+
     QMenu* menu = new QMenu(this);
     menu->setStyleSheet("margin: 6px");
 
@@ -88,6 +103,28 @@ KisPaintOpPresetsChooserPopup::KisPaintOpPresetsChooserPopup(QWidget * parent)
     m_d->viewModeButton = m_d->uiWdgPaintOpPresets.wdgPresetChooser->itemChooser()->viewModeButton();
     m_d->viewModeButton->setPopupWidget(menu);
 
+    // Hide the Tag button from the bottom row (replaced by tag selector widget)
+    m_d->uiWdgPaintOpPresets.wdgPresetChooser->itemChooser()->showTagToolBtn(false);
+
+    // Setup the tag selector widget
+    KisTagChooserWidget *tagChooser = m_d->uiWdgPaintOpPresets.wdgPresetChooser->itemChooser()->tagChooserWidget();
+    if (tagChooser) {
+        // Get the tag model from the tag chooser's combobox
+        KisTagModel *tagModel = qobject_cast<KisTagModel *>(tagChooser->findChild<QComboBox *>()->model());
+        if (tagModel) {
+            m_d->tagSelectorWidget->setTagModel(tagModel);
+        }
+        m_d->tagSelectorWidget->setTagChooserWidget(tagChooser);
+
+        // Sync initial selection
+        KisTagSP currentTag = tagChooser->currentlySelectedTag();
+        if (currentTag) {
+            m_d->tagSelectorWidget->setCurrentTag(currentTag);
+        }
+    }
+
+    connect(m_d->tagSelectorWidget, &KisBrushTagSelectorWidget::sizeHintChanged,
+            this, &KisPaintOpPresetsChooserPopup::slotTagSelectorSizeHintChanged);
 
     connect(m_d->uiWdgPaintOpPresets.wdgPresetChooser, SIGNAL(resourceSelected(KoResourceSP )),
             this, SIGNAL(resourceSelected(KoResourceSP )));
@@ -168,4 +205,11 @@ void KisPaintOpPresetsChooserPopup::updateViewSettings()
 void KisPaintOpPresetsChooserPopup::setResponsiveness(bool value)
 {
     m_d->uiWdgPaintOpPresets.wdgPresetChooser->itemChooser()->setResponsiveness(value);
+}
+
+void KisPaintOpPresetsChooserPopup::slotTagSelectorSizeHintChanged()
+{
+    // When tags are added/removed, the tag selector widget may need more or less rows.
+    // This updates the layout to accommodate the new size.
+    updateGeometry();
 }
