@@ -95,6 +95,9 @@ private Q_SLOTS:
     void slotSessionTweaksSaved(const QString &presetName);
     void slotSessionTweaksCleared(const QString &presetName);
 
+    /// Handle ctrl+scroll resizing to maintain rectangular thumbnails in STROKE mode.
+    void slotBaseLengthChanged(int length);
+
 private:
     KisResourceItemChooser *m_chooser {nullptr};
     KisPresetDelegate* m_delegate {nullptr};
