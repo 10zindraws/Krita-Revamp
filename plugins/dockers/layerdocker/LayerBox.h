@@ -142,6 +142,9 @@ private Q_SLOTS:
     void slotImageTimeChanged(int time);
     void slotForgetAboutSavedNodeBeforeEditSelectionMode();
 
+    void slotToggleLayerStyle();
+    void updatePropertyButtonStates();
+
 Q_SIGNALS:
     void imageChanged();
 
@@ -153,6 +156,7 @@ private:
 
     KisNodeSP findNonHidableNode(KisNodeSP startNode);
     void updateToolbarButtonVisibility();
+    void updateCompositeBoxWidth();
 private:
 
     QPointer<KisCanvas2> m_canvas;

@@ -756,11 +756,11 @@ void NodeDelegate::drawText(QPainter *p, const QStyleOptionViewItem &option, con
 
 QList<OptionalProperty> NodeDelegate::Private::rightmostProperties(const KisBaseNode::PropertyList &props) const
 {
-    QList<OptionalProperty> list;
-    QList<OptionalProperty> prependList;
-    list << OptionalProperty(0);
-    list << OptionalProperty(0);
-    list << OptionalProperty(0);
+    QList<OptionalProperty> result;
+    OptionalProperty layerStyleProp = 0;
+    OptionalProperty lockedProp = 0;
+    OptionalProperty inheritAlphaProp = 0;
+    OptionalProperty alphaLockedProp = 0;
 
     KisBaseNode::PropertyList::const_iterator it = props.constBegin();
     KisBaseNode::PropertyList::const_iterator end = props.constEnd();
@@ -768,33 +768,40 @@ QList<OptionalProperty> NodeDelegate::Private::rightmostProperties(const KisBase
         if (!it->isMutable && it->id != KisLayerPropertiesIcons::layerError.id()) continue;
 
         if (it->id == KisLayerPropertiesIcons::visible.id()) {
-            // noop...
+            // noop - visibility is handled separately in VISIBILITY_COL
+        } else if (it->id == KisLayerPropertiesIcons::layerStyle.id()) {
+            // Layer style is shown if the property exists (style is applied to layer)
+            // This allows toggling the style visibility on/off
+            layerStyleProp = OptionalProperty(&(*it));
         } else if (it->id == KisLayerPropertiesIcons::locked.id()) {
-            list[0] = OptionalProperty(&(*it));
+            // Only show if locked is enabled
+            if (it->state.toBool()) {
+                lockedProp = OptionalProperty(&(*it));
+            }
         } else if (it->id == KisLayerPropertiesIcons::inheritAlpha.id()) {
-            list[1] = OptionalProperty(&(*it));
+            // Only show if inherit alpha is enabled
+            if (it->state.toBool()) {
+                inheritAlphaProp = OptionalProperty(&(*it));
+            }
         } else if (it->id == KisLayerPropertiesIcons::alphaLocked.id()) {
-            list[2] = OptionalProperty(&(*it));
-        } else {
-            prependList.prepend(OptionalProperty(&(*it)));
+            // Only show if alpha locked is enabled
+            if (it->state.toBool()) {
+                alphaLockedProp = OptionalProperty(&(*it));
+            }
+        } else if (it->id == KisLayerPropertiesIcons::layerError.id()) {
+            // Error is always shown if present (prepend to result)
+            result.prepend(OptionalProperty(&(*it)));
         }
+        // Other properties like onionSkins, passThrough are not shown by default
     }
 
-    {
-        QMutableListIterator<OptionalProperty> i(prependList);
-        i.toBack();
-        while (i.hasPrevious()) {
-            OptionalProperty val = i.previous();
+    // Add properties in order: Fx (layerStyle), locked, inheritAlpha, alphaLocked
+    if (layerStyleProp) result.append(layerStyleProp);
+    if (lockedProp) result.append(lockedProp);
+    if (inheritAlphaProp) result.append(inheritAlphaProp);
+    if (alphaLockedProp) result.append(alphaLockedProp);
 
-            int emptyIndex = list.lastIndexOf(0);
-            if (emptyIndex < 0) break;
-
-            list[emptyIndex] = val;
-            i.remove();
-        }
-    }
-
-    return prependList + list;
+    return result;
 }
 
 int NodeDelegate::Private::numProperties(const QModelIndex &index) const

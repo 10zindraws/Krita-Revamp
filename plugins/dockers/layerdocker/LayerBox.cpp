@@ -36,6 +36,8 @@
 #include <QStyleFactory>
 #include <QStyle>
 #include <QSizePolicy>
+#include <QFontMetrics>
+#include <QStyleOptionComboBox>
 
 #include <kis_debug.h>
 #include <klocalizedstring.h>
@@ -87,6 +89,7 @@
 #include "KisIdleTasksManager.h"
 
 #include "kis_layer_utils.h"
+#include <kis_layer_properties_icons.h>
 
 #include "ui_WdgLayerBox.h"
 #include "NodeView.h"
@@ -278,15 +281,21 @@ LayerBox::LayerBox()
     m_wdgLayerBox->bnRaise->setEnabled(false);
 
     {
+        // Composite box: fixed width based on current text (updated dynamically)
         QSizePolicy comboPolicy = m_wdgLayerBox->cmbComposite->sizePolicy();
-        comboPolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+        comboPolicy.setHorizontalPolicy(QSizePolicy::Fixed);
+        comboPolicy.setHorizontalStretch(0);
         m_wdgLayerBox->cmbComposite->setSizePolicy(comboPolicy);
-        m_wdgLayerBox->cmbComposite->setMinimumWidth(0);
 
+        // Opacity slider: takes remaining space with stretch
         QSizePolicy opacityPolicy = m_wdgLayerBox->doubleOpacity->sizePolicy();
-        opacityPolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+        opacityPolicy.setHorizontalPolicy(QSizePolicy::Expanding);
+        opacityPolicy.setHorizontalStretch(1);
         m_wdgLayerBox->doubleOpacity->setSizePolicy(opacityPolicy);
-        m_wdgLayerBox->doubleOpacity->setMinimumWidth(0);
+        m_wdgLayerBox->doubleOpacity->setMinimumWidth(50);
+
+        // Initialize composite box width based on default selection
+        updateCompositeBoxWidth();
     }
 
     if (cfg.sliderLabels()) {
@@ -621,6 +630,25 @@ void LayerBox::setViewManager(KisViewManager* kisview)
 
     m_layerToggleSolo = actionManager->createAction("toggle_layer_soloing");
     connect(m_layerToggleSolo, SIGNAL(triggered(bool)), this, SLOT(toggleActiveLayerSolo()));
+
+    // Connect property toggle buttons to their actions
+    action = actionManager->actionByName("toggle_layer_lock");
+    if (action) {
+        connect(m_wdgLayerBox->bnLock, SIGNAL(clicked()), action, SLOT(trigger()));
+    }
+
+    action = actionManager->actionByName("toggle_layer_inherit_alpha");
+    if (action) {
+        connect(m_wdgLayerBox->bnInheritAlpha, SIGNAL(clicked()), action, SLOT(trigger()));
+    }
+
+    action = actionManager->actionByName("toggle_layer_alpha_lock");
+    if (action) {
+        connect(m_wdgLayerBox->bnAlphaLock, SIGNAL(clicked()), action, SLOT(trigger()));
+    }
+
+    // Layer style toggle - we need to handle this specially since it toggles visibility of the style
+    connect(m_wdgLayerBox->bnLayerStyle, &QToolButton::clicked, this, &LayerBox::slotToggleLayerStyle);
 }
 
 void LayerBox::setCanvas(KoCanvasBase *canvas)
@@ -771,29 +799,43 @@ void LayerBox::updateToolbarButtonVisibility()
         return;
     }
 
+    // Handle visibility for top row (hbox2): cmbComposite, opacityLabel, doubleOpacity
     const int topAvailable = layoutAvailableWidth(m_wdgLayerBox->hbox2, m_wdgLayerBox->cmbComposite);
     if (topAvailable > 0) {
-        const int spacing = layoutSpacing(m_wdgLayerBox->hbox2, m_wdgLayerBox->cmbComposite);
-        const int filterWidth = widgetWidthHint(m_wdgLayerBox->bnLayerFilters);
-        const int minComboWidth = 40;
-        const int requiredWithFilter = minComboWidth + spacing + filterWidth;
-        m_wdgLayerBox->bnLayerFilters->setVisible(topAvailable >= requiredWithFilter);
-    }
-
-    const int opacityAvailable = layoutAvailableWidth(m_wdgLayerBox->opacityLayout, m_wdgLayerBox->doubleOpacity);
-    if (opacityAvailable > 0) {
         const bool forceHideLabel = m_wdgLayerBox->opacityLabel->property("forceHidden").toBool();
-        const int spacing = layoutSpacing(m_wdgLayerBox->opacityLayout, m_wdgLayerBox->doubleOpacity);
+        const int spacing = layoutSpacing(m_wdgLayerBox->hbox2, m_wdgLayerBox->cmbComposite);
         const int labelWidth = widgetWidthHint(m_wdgLayerBox->opacityLabel);
         const int minSliderWidth = 40;
+        const int minComboWidth = 40;
 
-        bool showLabel = !forceHideLabel && opacityAvailable >= (labelWidth + spacing + minSliderWidth);
+        // Base requirement: composite box + opacity slider
+        int baseWidth = minComboWidth + spacing + minSliderWidth;
+
+        // Show opacity label if there's enough space
+        bool showLabel = !forceHideLabel && topAvailable >= (baseWidth + spacing + labelWidth);
         m_wdgLayerBox->opacityLabel->setVisible(showLabel);
+    }
 
-        const int baseWidth = (showLabel ? labelWidth + spacing : 0) + minSliderWidth;
+    // Handle visibility for property buttons row (hbox3): bnLayerStyle, bnLock, bnInheritAlpha, bnAlphaLock, spacer, bnLayerFilters, configureLayerDockerToolbar
+    const int hbox3Available = layoutAvailableWidth(m_wdgLayerBox->hbox3, m_wdgLayerBox->bnLayerStyle);
+    if (hbox3Available > 0) {
+        const int spacing = layoutSpacing(m_wdgLayerBox->hbox3, m_wdgLayerBox->bnLayerStyle);
+        const int propButtonWidth = widgetWidthHint(m_wdgLayerBox->bnLayerStyle);
+        const int filterWidth = widgetWidthHint(m_wdgLayerBox->bnLayerFilters);
         const int configWidth = widgetWidthHint(m_wdgLayerBox->configureLayerDockerToolbar);
-        const int requiredWithConfig = baseWidth + spacing + configWidth;
-        m_wdgLayerBox->configureLayerDockerToolbar->setVisible(opacityAvailable >= requiredWithConfig);
+
+        // Property buttons (4) are always visible if they fit
+        // Filter and config buttons on the right side
+        int totalPropButtons = 4 * propButtonWidth + 3 * spacing;
+        int totalRight = filterWidth + spacing + configWidth;
+
+        // Show filter button if there's enough space
+        bool showFilter = hbox3Available >= (totalPropButtons + spacing + filterWidth);
+        m_wdgLayerBox->bnLayerFilters->setVisible(showFilter);
+
+        // Show config button if there's enough space
+        bool showConfig = hbox3Available >= (totalPropButtons + spacing + totalRight);
+        m_wdgLayerBox->configureLayerDockerToolbar->setVisible(showConfig);
     }
 
     const int bottomAvailable = layoutAvailableWidth(m_wdgLayerBox->hbox1, m_wdgLayerBox->bnAdd);
@@ -904,8 +946,110 @@ void LayerBox::updateUI()
             m_wdgLayerBox->doubleOpacity->setEnabled(false);
         }
     }
+
+    updatePropertyButtonStates();
 }
 
+void LayerBox::updatePropertyButtonStates()
+{
+    if (!m_canvas) return;
+    if (!m_nodeManager) return;
+
+    KisNodeSP activeNode = m_nodeManager->activeNode();
+
+    // Default: disable all property buttons and set default (off) icons
+    m_wdgLayerBox->bnLayerStyle->setEnabled(false);
+    m_wdgLayerBox->bnLayerStyle->setChecked(false);
+    m_wdgLayerBox->bnLayerStyle->setIcon(KisIconUtils::loadIcon("layer-style-disabled"));
+    m_wdgLayerBox->bnLock->setEnabled(false);
+    m_wdgLayerBox->bnLock->setChecked(false);
+    m_wdgLayerBox->bnLock->setIcon(KisIconUtils::loadIcon("layer-unlocked"));
+    m_wdgLayerBox->bnInheritAlpha->setEnabled(false);
+    m_wdgLayerBox->bnInheritAlpha->setChecked(false);
+    m_wdgLayerBox->bnInheritAlpha->setIcon(KisIconUtils::loadIcon("transparency-enabled"));
+    m_wdgLayerBox->bnAlphaLock->setEnabled(false);
+    m_wdgLayerBox->bnAlphaLock->setChecked(false);
+    m_wdgLayerBox->bnAlphaLock->setIcon(KisIconUtils::loadIcon("transparency-unlocked"));
+
+    if (!activeNode) return;
+
+    // Check if this is a layer that can have layer styles
+    KisLayerSP layer = qobject_cast<KisLayer*>(activeNode.data());
+    if (layer) {
+        // Enable the Fx button for layers (can always open layer style dialog)
+        m_wdgLayerBox->bnLayerStyle->setEnabled(true);
+
+        // If layer has a style, show enabled icon and check state
+        if (layer->layerStyle()) {
+            KisBaseNode::PropertyList props = activeNode->sectionModelProperties();
+            for (const KisBaseNode::Property &prop : props) {
+                if (prop.id == KisLayerPropertiesIcons::layerStyle.id()) {
+                    bool styleEnabled = prop.state.toBool();
+                    m_wdgLayerBox->bnLayerStyle->setChecked(styleEnabled);
+                    m_wdgLayerBox->bnLayerStyle->setIcon(styleEnabled ?
+                        KisIconUtils::loadIcon("layer-style-enabled") :
+                        KisIconUtils::loadIcon("layer-style-disabled"));
+                    break;
+                }
+            }
+        }
+    }
+
+    // Get the node's properties for other buttons
+    KisBaseNode::PropertyList props = activeNode->sectionModelProperties();
+
+    for (const KisBaseNode::Property &prop : props) {
+        if (prop.id == KisLayerPropertiesIcons::locked.id()) {
+            m_wdgLayerBox->bnLock->setEnabled(prop.isMutable);
+            m_wdgLayerBox->bnLock->setChecked(prop.state.toBool());
+            m_wdgLayerBox->bnLock->setIcon(prop.state.toBool() ?
+                KisIconUtils::loadIcon("layer-locked") :
+                KisIconUtils::loadIcon("layer-unlocked"));
+        } else if (prop.id == KisLayerPropertiesIcons::inheritAlpha.id()) {
+            m_wdgLayerBox->bnInheritAlpha->setEnabled(prop.isMutable);
+            m_wdgLayerBox->bnInheritAlpha->setChecked(prop.state.toBool());
+            m_wdgLayerBox->bnInheritAlpha->setIcon(prop.state.toBool() ?
+                KisIconUtils::loadIcon("transparency-disabled") :
+                KisIconUtils::loadIcon("transparency-enabled"));
+        } else if (prop.id == KisLayerPropertiesIcons::alphaLocked.id()) {
+            m_wdgLayerBox->bnAlphaLock->setEnabled(prop.isMutable);
+            m_wdgLayerBox->bnAlphaLock->setChecked(prop.state.toBool());
+            m_wdgLayerBox->bnAlphaLock->setIcon(prop.state.toBool() ?
+                KisIconUtils::loadIcon("transparency-locked") :
+                KisIconUtils::loadIcon("transparency-unlocked"));
+        }
+    }
+}
+
+void LayerBox::slotToggleLayerStyle()
+{
+    if (!m_canvas) return;
+    if (!m_nodeManager) return;
+
+    KisNodeSP activeNode = m_nodeManager->activeNode();
+    if (!activeNode) return;
+
+    // Check if this is a layer that can have layer styles
+    KisLayerSP layer = qobject_cast<KisLayer*>(activeNode.data());
+    if (!layer) return;
+
+    // If the layer doesn't have a style applied, open the Layer Style dialog
+    if (!layer->layerStyle()) {
+        // Trigger the layer_style action to open the dialog
+        QAction *action = m_canvas->viewManager()->actionManager()->actionByName("layer_style");
+        if (action) {
+            action->trigger();
+        }
+        return;
+    }
+
+    // If layer has a style, toggle the layer style visibility
+    QVariant currentState = KisLayerPropertiesIcons::nodeProperty(
+        activeNode, KisLayerPropertiesIcons::layerStyle, false);
+
+    KisLayerPropertiesIcons::setNodePropertyAutoUndo(
+        activeNode, KisLayerPropertiesIcons::layerStyle, !currentState.toBool(), m_image);
+}
 
 /**
  * This method is called *only* when non-GUI code requested the
@@ -959,6 +1103,37 @@ void LayerBox::slotSetCompositeOp(const KoCompositeOp* compositeOp)
     m_wdgLayerBox->cmbComposite->blockSignals(true);
     m_wdgLayerBox->cmbComposite->selectCompositeOp(opId);
     m_wdgLayerBox->cmbComposite->blockSignals(false);
+
+    updateCompositeBoxWidth();
+}
+
+void LayerBox::updateCompositeBoxWidth()
+{
+    // Calculate the width needed for the current text
+    QFontMetrics fm(m_wdgLayerBox->cmbComposite->font());
+    QString currentText = m_wdgLayerBox->cmbComposite->currentText();
+
+    // Calculate text width
+    int textWidth = fm.horizontalAdvance(currentText);
+
+    // Get the dropdown button width from the style
+    QStyleOptionComboBox opt;
+    opt.initFrom(m_wdgLayerBox->cmbComposite);
+    QRect arrowRect = m_wdgLayerBox->cmbComposite->style()->subControlRect(
+        QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, m_wdgLayerBox->cmbComposite);
+    int dropdownWidth = arrowRect.width();
+
+    // Add margins for text padding (left margin + right margin before arrow)
+    int margins = 18;
+
+    int newWidth = textWidth + dropdownWidth + margins;
+
+    // Set minimum width (don't make it too narrow)
+    int minWidth = 70;
+    newWidth = qMax(newWidth, minWidth);
+
+    // Set the fixed width for the combo box
+    m_wdgLayerBox->cmbComposite->setFixedWidth(newWidth);
 }
 
 // range: 0-100
@@ -1042,6 +1217,8 @@ void LayerBox::slotCompositeOpChanged(int index)
 
     QString compositeOp = m_wdgLayerBox->cmbComposite->selectedCompositeOp().id();
     m_nodeManager->nodeCompositeOpChanged(m_nodeManager->activeColorSpace()->compositeOp(compositeOp));
+
+    updateCompositeBoxWidth();
 }
 
 void LayerBox::slotOpacityChanged()
@@ -1473,6 +1650,13 @@ void LayerBox::slotUpdateIcons() {
     m_wdgLayerBox->bnProperties->setIcon(KisIconUtils::loadIcon("properties"));
     m_wdgLayerBox->bnDuplicate->setIcon(KisIconUtils::loadIcon("duplicatelayer"));
     m_wdgLayerBox->configureLayerDockerToolbar->setIcon(KisIconUtils::loadIcon("view-choose"));
+
+    // Property toggle buttons in hbox3
+    // Use the "off" state icons as the default (buttons will show these when unchecked)
+    m_wdgLayerBox->bnLayerStyle->setIcon(KisIconUtils::loadIcon("layer-style-disabled"));
+    m_wdgLayerBox->bnLock->setIcon(KisIconUtils::loadIcon("layer-unlocked"));
+    m_wdgLayerBox->bnInheritAlpha->setIcon(KisIconUtils::loadIcon("transparency-enabled"));
+    m_wdgLayerBox->bnAlphaLock->setIcon(KisIconUtils::loadIcon("transparency-unlocked"));
 
     // call child function about needing to update icons
     m_wdgLayerBox->listLayers->slotUpdateIcons();

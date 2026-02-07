@@ -4,10 +4,10 @@
 # by locating its internal Qt widgets/layouts and inserting/hiding controls.
 #
 # Layout structure from Krita's WdgLayerBox.ui:
-# - hbox1: Bottom bar with bnAdd, bnDuplicate, bnLower, bnRaise, bnProperties, spacer, bnDelete
-# - hbox2: Top bar with cmbComposite (blending mode), bnLayerFilters
-# - opacityLayout: Opacity row with opacityLabel, doubleOpacity, configureLayerDockerToolbar
+# - hbox2: Top bar with cmbComposite (blending mode), opacityLabel, doubleOpacity
+# - hbox3: Property buttons row with bnLayerStyle, bnLock, bnInheritAlpha, bnAlphaLock, spacer, bnLayerFilters, configureLayerDockerToolbar
 # - horizontalLayout: Contains listLayers (NodeView)
+# - hbox1: Bottom bar with bnAdd, bnDuplicate, bnLower, bnRaise, bnProperties, spacer, bnDelete
 
 from __future__ import annotations
 
@@ -1249,9 +1249,9 @@ class LayersDockerPatcher(QObject):
                 break
 
     def _add_clipping_mask_button(self) -> None:
-        """Add the 'Clipping Mask' button to the left of the opacity slider in opacityLayout."""
+        """Add the 'Clipping Mask' button at the start of hbox3 (property buttons row)."""
         btn_name = "btnClippingMask_LayerKit"
-        
+
         # Check if already added
         if btn_name in self._patched_buttons:
             return
@@ -1260,33 +1260,27 @@ class LayersDockerPatcher(QObject):
             self._patched_buttons.add(btn_name)
             return
 
-        # Find the opacity layout by name (opacityLayout from WdgLayerBox.ui)
-        opacity_layout = self.docker.findChild(QHBoxLayout, "opacityLayout")
-        
-        # Find doubleOpacity for reference
-        spin = self.docker.findChild(QDoubleSpinBox, "doubleOpacity")
-        if spin is None:
-            # Try soft search
-            for cand in self.docker.findChildren(QDoubleSpinBox):
-                if "opacity" in (cand.objectName() or "").lower():
-                    spin = cand
-                    break
-        if spin is None:
-            return
-        
-        # If layout not found by name, get it from spin's parent
-        if opacity_layout is None:
-            parent_w = spin.parentWidget()
-            if parent_w is None:
-                return
-            opacity_layout = parent_w.layout()
-            if opacity_layout is None:
-                return
+        # Find hbox3 (property buttons row) by name
+        hbox3 = self.docker.findChild(QHBoxLayout, "hbox3")
 
-        spin_index = self._index_of_widget(opacity_layout, spin)
-        
-        # Get parent widget for button
-        parent_widget = spin.parentWidget()
+        # If hbox3 not found, fallback to finding bnLayerStyle's parent layout
+        if hbox3 is None:
+            bn_layer_style = self.docker.findChild(QToolButton, "bnLayerStyle")
+            if bn_layer_style is not None:
+                parent_w = bn_layer_style.parentWidget()
+                if parent_w is not None:
+                    hbox3 = parent_w.layout()
+
+        if hbox3 is None:
+            return
+
+        # Get parent widget for the button (from first widget in layout)
+        parent_widget = None
+        if hbox3.count() > 0:
+            item = hbox3.itemAt(0)
+            if item and item.widget():
+                parent_widget = item.widget().parentWidget()
+
         if parent_widget is None:
             return
 
@@ -1301,12 +1295,9 @@ class LayersDockerPatcher(QObject):
 
         btn.clicked.connect(self._do_clipping_mask_sequence)
 
-        # Insert before the opacity slider
-        if spin_index != -1:
-            opacity_layout.insertWidget(spin_index, btn)
-        else:
-            opacity_layout.insertWidget(0, btn)
-        
+        # Insert at the beginning of hbox3 (before property buttons)
+        hbox3.insertWidget(0, btn)
+
         self._patched_buttons.add(btn_name)
 
     def _has_layer_below(self, node) -> bool:
