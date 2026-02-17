@@ -48,6 +48,10 @@
 #include <QAction>
 #include <QWindow>
 #include <QTemporaryDir>
+#ifdef Q_OS_WIN
+#include <Windows.h>
+#include <io.h>
+#endif
 #include <QScrollArea>
 #include <QTimer>
 #include <kactioncollection.h>
@@ -578,6 +582,21 @@ KisMainWindow::KisMainWindow(QUuid uuid)
     QAction *helpAction = actionCollection()->action("help_contents");
     helpAction->disconnect();
     connect(helpAction, SIGNAL(triggered()), this, SLOT(showManual()));
+
+    // Connect to aboutToQuit to ensure window state is saved before application exits,
+    // which is critical for persisting docker sizes across Windows reboots
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
+        // Save state one final time before application exits
+        // Only save if we have a valid view (not on welcome page)
+        if (d->widgetStack->currentIndex() != 0) {
+            saveWindowState(true);
+        } else if (!d->dockerStateBeforeHiding.isEmpty()) {
+            // On welcome page, save the state that was captured before hiding
+            d->windowStateConfig.writeEntry("State", d->dockerStateBeforeHiding.toBase64());
+            saveWindowSettings();
+        }
+        KSharedConfig::openConfig()->sync();
+    });
 
 #if 0
     //check for colliding shortcuts
@@ -1575,6 +1594,20 @@ void KisMainWindow::saveWindowSettings()
     }
 
     KSharedConfig::openConfig()->sync();
+
+#ifdef Q_OS_WIN
+    // Force physical disk write of the config file to ensure settings persist
+    // across Windows reboots. Without this, the data may only be in the OS cache
+    // and be lost if the process is terminated abruptly during shutdown.
+    QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    QString kritarcPath = configPath + QStringLiteral("/kritarc");
+    QFile file(kritarcPath);
+    if (file.open(QIODevice::ReadWrite)) {
+        FlushFileBuffers((HANDLE)_get_osfhandle(file.handle()));
+        file.close();
+    }
+#endif
+
     resetAutoSaveSettings(); // Don't let KisKMainWindow override the good stuff we wrote down
 
 }
@@ -2491,6 +2524,14 @@ QDockWidget* KisMainWindow::createDockWidget(KoDockFactoryBase* factory)
         addDockWidget(side, dockWidget);
         if (!visible) {
             dockWidget->hide();
+        }
+
+        // Restore individual dock widget sizes from config
+        // This provides a fallback to ensure dock sizes persist across reboots
+        int savedWidth = group.readEntry("width", 0);
+        int savedHeight = group.readEntry("height", 0);
+        if (savedWidth > 0 && savedHeight > 0) {
+            dockWidget->resize(savedWidth, savedHeight);
         }
 
         bool locked = group.readEntry("Locked", false);
