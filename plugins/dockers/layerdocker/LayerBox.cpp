@@ -216,6 +216,7 @@ LayerBox::LayerBox()
     , m_infoTextOpacityCompressor(100, KisSignalCompressor::FIRST_INACTIVE)
     , m_nodeOpacityCompressor(200, KisSignalCompressor::FIRST_INACTIVE)
 {
+    Q_INIT_RESOURCE(layerdocker);
     KisConfig cfg(false);
 
     QWidget* mainWidget = new QWidget(this);
@@ -267,6 +268,9 @@ LayerBox::LayerBox()
     m_wdgLayerBox->bnLower->setIconSize(QSize(22, 22));
     m_wdgLayerBox->bnProperties->setIconSize(QSize(22, 22));
     m_wdgLayerBox->bnDuplicate->setIconSize(QSize(22, 22));
+
+    // Clipping mask button icon (from embedded resource)
+    m_wdgLayerBox->bnClippingMask->setIcon(QIcon(":/layerdocker/clippingmask.png"));
 
     m_wdgLayerBox->bnLower->setProperty("forceHidden", true);
     m_wdgLayerBox->bnRaise->setProperty("forceHidden", true);
@@ -649,6 +653,9 @@ void LayerBox::setViewManager(KisViewManager* kisview)
 
     // Layer style toggle - we need to handle this specially since it toggles visibility of the style
     connect(m_wdgLayerBox->bnLayerStyle, &QToolButton::clicked, this, &LayerBox::slotToggleLayerStyle);
+
+    // Clipping mask button
+    connect(m_wdgLayerBox->bnClippingMask, &QToolButton::clicked, this, &LayerBox::slotClippingMask);
 }
 
 void LayerBox::setCanvas(KoCanvasBase *canvas)
@@ -824,9 +831,9 @@ void LayerBox::updateToolbarButtonVisibility()
         const int filterWidth = widgetWidthHint(m_wdgLayerBox->bnLayerFilters);
         const int configWidth = widgetWidthHint(m_wdgLayerBox->configureLayerDockerToolbar);
 
-        // Property buttons (4) are always visible if they fit
+        // Property buttons (5, including clipping mask) are always visible if they fit
         // Filter and config buttons on the right side
-        int totalPropButtons = 4 * propButtonWidth + 3 * spacing;
+        int totalPropButtons = 5 * propButtonWidth + 4 * spacing;
         int totalRight = filterWidth + spacing + configWidth;
 
         // Show filter button if there's enough space
@@ -1049,6 +1056,41 @@ void LayerBox::slotToggleLayerStyle()
 
     KisLayerPropertiesIcons::setNodePropertyAutoUndo(
         activeNode, KisLayerPropertiesIcons::layerStyle, !currentState.toBool(), m_image);
+}
+
+void LayerBox::slotClippingMask()
+{
+    if (!m_canvas || !m_nodeManager) return;
+
+    KisNodeSP activeNode = m_nodeManager->activeNode();
+    if (!activeNode) return;
+
+    // Check if there's a layer below in the view model
+    QModelIndex currentIdx = m_wdgLayerBox->listLayers->currentIndex();
+    if (!currentIdx.isValid()) return;
+
+    QModelIndex belowIdx = currentIdx.sibling(currentIdx.row() + 1, currentIdx.column());
+    if (!belowIdx.isValid()) return;
+
+    // 1. Toggle inherit alpha on the active node
+    KisAction *inheritAction = dynamic_cast<KisAction*>(
+        m_canvas->viewManager()->actionManager()->actionByName("toggle_layer_inherit_alpha"));
+    if (inheritAction) {
+        inheritAction->trigger();
+    }
+
+    // 2. Add the layer below to the selection
+    QItemSelectionModel *selModel = m_wdgLayerBox->listLayers->selectionModel();
+    if (selModel) {
+        selModel->select(belowIdx, QItemSelectionModel::Select);
+    }
+
+    // 3. Quick group the selected layers
+    KisAction *quickGroupAction = dynamic_cast<KisAction*>(
+        m_canvas->viewManager()->actionManager()->actionByName("create_quick_group"));
+    if (quickGroupAction) {
+        quickGroupAction->trigger();
+    }
 }
 
 /**

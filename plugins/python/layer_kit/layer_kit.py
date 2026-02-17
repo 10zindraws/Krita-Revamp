@@ -1259,6 +1259,11 @@ class LayersDockerPatcher(QObject):
         if existing is not None:
             self._patched_buttons.add(btn_name)
             return
+        # Skip if native clipping mask button exists (merged into C++ codebase)
+        native_btn = self.docker.findChild(QToolButton, "bnClippingMask")
+        if native_btn is not None:
+            self._patched_buttons.add(btn_name)
+            return
 
         # Find hbox3 (property buttons row) by name
         hbox3 = self.docker.findChild(QHBoxLayout, "hbox3")

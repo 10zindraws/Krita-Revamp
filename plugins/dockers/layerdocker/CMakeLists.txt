@@ -12,7 +12,9 @@ ki18n_wrap_ui(kritalayerdocker_static_SRCS
     WdgLayerBox.ui
 )
 
-QT5_WRAP_CPP(kritalayerdocker_HEADERS_MOC 
+qt5_add_resources(kritalayerdocker_static_SRCS layerdocker.qrc)
+
+QT5_WRAP_CPP(kritalayerdocker_HEADERS_MOC
     NodePropertyAction_p.h
     SyncButtonAndAction.h
 )

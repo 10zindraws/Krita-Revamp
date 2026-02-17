@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/layerdocker">
+        <file>clippingmask.png</file>
+    </qresource>
+</RCC>

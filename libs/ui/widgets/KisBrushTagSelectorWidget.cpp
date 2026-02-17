@@ -142,6 +142,14 @@ void KisBrushTagSelectorWidget::rebuildButtons()
 
     syncButtonSelection();
 
+    // Hide the tag selector when only the default "All" tag exists
+    // Show it when there are additional user-created tags
+    if (m_buttons.size() <= 1) {
+        setVisible(false);
+    } else {
+        setVisible(true);
+    }
+
     m_isUpdating = false;
 
     // Check if size hint changed and emit signal
@@ -188,6 +196,7 @@ void KisBrushTagSelectorWidget::createButton(KisTagSP tag)
     btn->setCheckable(true);
     btn->setProperty("tagUrl", tag->url());
     btn->setContextMenuPolicy(Qt::DefaultContextMenu);
+    btn->setStyleSheet(QStringLiteral("QPushButton { padding: 2px 8px; }"));
 
     m_buttonGroup->addButton(btn);
     m_flowLayout->addWidget(btn);

@@ -143,6 +143,7 @@ private Q_SLOTS:
     void slotForgetAboutSavedNodeBeforeEditSelectionMode();
 
     void slotToggleLayerStyle();
+    void slotClippingMask();
     void updatePropertyButtonStates();
 
 Q_SIGNALS:
