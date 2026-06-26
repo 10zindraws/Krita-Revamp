@@ -29,6 +29,7 @@ Additional features can't be officially added to Krita 5.2.14 or 5.3 (according 
 - Added "extra space" spacers so you can customize your toolbars more since expanding spacers can only be used once <br>
 <img width="500" src="https://github.com/user-attachments/assets/e75fa0d9-e167-41cc-9278-41a22914d316" />
 
+- Clipping Masks - see example: https://krita-artists.org/t/krita-with-clipping-test-build/68119/107?u=tenzindraws
 - Overview updates instantly - no more 1 second latency for brushstrokes to appear
 - Implemented the same togglable horizontal relative zoom option from 5.3 prealpha to this version of Krita
 - Added smoothing slider - optional toolbar slider
