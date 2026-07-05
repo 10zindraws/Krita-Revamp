@@ -22,7 +22,9 @@ Additional features can't be officially added to Krita 5.2.14 or 5.3 (according 
 - Removed news section at welcome screen so you can see more of your recent images
 - For Photoshop users: Horizontal relative zoom (like scrubby zoom) is an option (previously only an option in 5.3 prealpha). <br>
 - For Photoshop users: "Activate Line Tool" only activates when freehand brush tool is the current tool <br>
-[Demo and explanation](https://krita-artists.org/t/canvas-input-settings-configure-selection-settings-photoshop-compatible-inconsistencies/32351/9)
+[Demo and explanation](https://krita-artists.org/t/canvas-input-settings-configure-selection-settings-photoshop-compatible-inconsistencies/32351/9) <br>
+  *make sure to unbind "Change Primary Setting" in Canvas Input Settings. Then bind Shift + Left Button to Activate Line Tool* <br>
+  The Line Tool will not activate if you hold shift unless the freehand brush tool is your current active tool. Useful for lasso operations
 - Groups are shorter and use a folder icon for thumbnails like Photoshop folders
 <img width="259" height="354" alt="image" src="https://github.com/user-attachments/assets/6f4b769e-4570-4b58-b492-711033027401" /> <br>
 - Vertical toolbar icons can be resized in Settings > Window
